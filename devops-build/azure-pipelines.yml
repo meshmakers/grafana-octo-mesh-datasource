@@ -1,0 +1,105 @@
+name: $(MajorVersion).$(MinorVersion).$(date:yyMM).$(DayOfMonth)$(rev:rrr)-$(Build.SourceBranchName)
+
+trigger:
+  batch: true
+  branches:
+    include:
+      - dev/*
+      - test/*
+      - main
+  tags:
+    include:
+      - r*
+
+variables:
+  - group: ApiKeys-mm-cloud
+  - group: OctoDefault
+  - name: pluginId
+    value: 'grafana-octo-mesh-datasource'
+  - name: isRelease
+    value: ${{ startsWith(variables['Build.SourceBranch'], 'refs/tags/r') }}
+  - name: isMain
+    value: ${{ eq(variables['Build.SourceBranch'], 'refs/heads/main') }}
+  - name: isTest
+    value: ${{ startsWith(variables['Build.SourceBranch'], 'refs/heads/test') }}
+
+stages:
+  - stage: Build
+    displayName: Build and Test
+    jobs:
+      - job: BuildAndTest
+        displayName: Build Grafana Plugin
+        pool:
+          name: meshmakers-ci-agents
+        steps:
+          - template: update-build-number.yml
+
+          - checkout: self
+            clean: true
+
+          - template: set-version.yml
+
+          - task: Bash@3
+            displayName: Build plugin in Docker
+            inputs:
+              targetType: inline
+              workingDirectory: $(Build.SourcesDirectory)
+              script: |
+                DOCKER_BUILDKIT=1 docker build \
+                  -f devops-build/Dockerfile.build \
+                  --build-arg VERSION=$(BuildNumberShort) \
+                  --target output \
+                  --output type=local,dest=./build-output \
+                  .
+
+          - task: CopyFiles@2
+            displayName: Copy dist to staging
+            inputs:
+              SourceFolder: $(Build.SourcesDirectory)/build-output/dist
+              Contents: '**/*'
+              TargetFolder: $(Build.ArtifactStagingDirectory)/dist
+
+          - task: PublishBuildArtifacts@1
+            displayName: Publish build artifacts
+            inputs:
+              PathtoPublish: $(Build.ArtifactStagingDirectory)
+              ArtifactName: local
+
+  - stage: Package
+    displayName: Package Plugin
+    dependsOn: Build
+    jobs:
+      - job: PackagePlugin
+        displayName: Create Plugin Package
+        pool:
+          name: meshmakers-ci-agents
+        steps:
+          - template: update-build-number.yml
+
+          - checkout: self
+            clean: true
+
+          - task: DownloadPipelineArtifact@2
+            displayName: Download build artifacts
+            inputs:
+              buildType: current
+              artifactName: local
+              targetPath: $(Pipeline.Workspace)/artifacts
+
+          - task: CopyFiles@2
+            displayName: Restore dist folder
+            inputs:
+              SourceFolder: $(Pipeline.Workspace)/artifacts/dist
+              Contents: '**/*'
+              TargetFolder: $(Build.SourcesDirectory)/dist
+
+          - task: ArchiveFiles@2
+            displayName: Create plugin zip
+            inputs:
+              rootFolderOrFile: $(Build.SourcesDirectory)/dist
+              includeRootFolder: false
+              archiveType: zip
+              archiveFile: $(Build.ArtifactStagingDirectory)/$(pluginId)-$(BuildNumberShort).zip
+              replaceExistingArchive: true
+
+          - template: handle-artifacts.yml

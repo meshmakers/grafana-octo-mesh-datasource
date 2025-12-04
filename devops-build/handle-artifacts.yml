@@ -1,0 +1,22 @@
+steps:
+  - task: CopyFiles@2
+    displayName: 'Copy plugin zip to artifacts'
+    inputs:
+      SourceFolder: $(Build.ArtifactStagingDirectory)
+      Contents: '**/*.zip'
+      TargetFolder: $(Build.ArtifactStagingDirectory)/plugin
+      flattenFolders: true
+
+  - task: PowerShell@2
+    displayName: 'Create version info file'
+    inputs:
+      targetType: 'inline'
+      script: |
+        New-Item $(Build.ArtifactStagingDirectory)/versioninfo.txt -Force
+        Set-Content $(Build.ArtifactStagingDirectory)/versioninfo.txt $(Build.BuildNumber)
+
+  - task: PublishBuildArtifacts@1
+    displayName: 'Publish Artifact: local'
+    inputs:
+      PathtoPublish: $(Build.ArtifactStagingDirectory)
+      ArtifactName: local

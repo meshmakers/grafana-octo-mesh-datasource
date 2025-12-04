@@ -1,0 +1,26 @@
+steps:
+- task: PowerShell@2
+  displayName: 'Update version in package.json and plugin.json'
+  inputs:
+    targetType: 'inline'
+    script: |
+      $version = "$(BuildNumberShort)"
+      Write-Host "Setting version to $version"
+
+      # Update package.json
+      $packageJsonPath = "$(Build.SourcesDirectory)/package.json"
+      if (Test-Path $packageJsonPath) {
+        $packageJson = Get-Content $packageJsonPath -Raw | ConvertFrom-Json
+        $packageJson.version = $version
+        $packageJson | ConvertTo-Json -Depth 100 | Set-Content $packageJsonPath -Encoding UTF8
+        Write-Host "Updated package.json version to $version"
+      }
+
+      # Update src/plugin.json
+      $pluginJsonPath = "$(Build.SourcesDirectory)/src/plugin.json"
+      if (Test-Path $pluginJsonPath) {
+        $pluginJson = Get-Content $pluginJsonPath -Raw | ConvertFrom-Json
+        $pluginJson.info.version = $version
+        $pluginJson | ConvertTo-Json -Depth 100 | Set-Content $pluginJsonPath -Encoding UTF8
+        Write-Host "Updated src/plugin.json version to $version"
+      }

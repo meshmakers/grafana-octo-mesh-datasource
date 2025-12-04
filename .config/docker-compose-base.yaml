@@ -1,0 +1,48 @@
+services:
+  grafana:
+    user: root
+    container_name: 'grafana-octo-mesh-datasource'
+
+    build:
+      context: .
+      args:
+        grafana_image: ${GRAFANA_IMAGE:-grafana-enterprise}
+        grafana_version: ${GRAFANA_VERSION:-12.3.0}
+        development: ${DEVELOPMENT:-false}
+        anonymous_auth_enabled: ${ANONYMOUS_AUTH_ENABLED:-true}
+    ports:
+      - 3000:3000/tcp
+    volumes:
+      - ../dist:/var/lib/grafana/plugins/grafana-octo-mesh-datasource
+      - ../provisioning:/etc/grafana/provisioning
+
+    environment:
+      NODE_ENV: development
+      GF_LOG_FILTERS: plugin.grafana-octo-mesh-datasource:debug
+      GF_LOG_LEVEL: debug
+      GF_DATAPROXY_LOGGING: 1
+      GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS: grafana-octo-mesh-datasource
+      # Disable anonymous auth when using OAuth
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      # OAuth configuration for OctoMesh Identity
+      GF_AUTH_GENERIC_OAUTH_ENABLED: "true"
+      GF_AUTH_GENERIC_OAUTH_NAME: "OctoMesh"
+      GF_AUTH_GENERIC_OAUTH_CLIENT_ID: "grafana-test"
+      GF_AUTH_GENERIC_OAUTH_SCOPES: "openid profile email assetTenantAPI.full_access assetSystemAPI.full_access"
+      # Auth URL is accessed by browser (use localhost)
+      GF_AUTH_GENERIC_OAUTH_AUTH_URL: "https://localhost:5003/connect/authorize"
+      # Token URL is accessed by Grafana server (use docker internal)
+      GF_AUTH_GENERIC_OAUTH_TOKEN_URL: "https://host.docker.internal:5003/connect/token"
+      # API URL is accessed by Grafana server (use docker internal)
+      GF_AUTH_GENERIC_OAUTH_API_URL: "https://host.docker.internal:5003/connect/userinfo"
+      GF_AUTH_GENERIC_OAUTH_ALLOW_SIGN_UP: "true"
+      GF_AUTH_GENERIC_OAUTH_USE_PKCE: "true"
+      GF_AUTH_GENERIC_OAUTH_TLS_SKIP_VERIFY_INSECURE: "true"
+      # Required for OAuth token to be passed to datasources
+      GF_AUTH_GENERIC_OAUTH_ALLOW_ASSIGN_GRAFANA_ADMIN: "true"
+      GF_AUTH_OAUTH_ALLOW_INSECURE_EMAIL_LOOKUP: "true"
+      # Make all OAuth users admins for dev
+      GF_AUTH_GENERIC_OAUTH_ROLE_ATTRIBUTE_PATH: "'Admin'"
+      GF_USERS_AUTO_ASSIGN_ORG_ROLE: "Admin"
+      # Skip TLS verification for all backend requests (dev only!)
+      GF_DATAPROXY_TLS_INSECURE_SKIP_VERIFY: "true"

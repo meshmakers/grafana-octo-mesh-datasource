@@ -1,0 +1,57 @@
+steps:
+- task: PowerShell@2
+  inputs:
+    targetType: 'inline'
+    script: |
+      Write-Host "Source Branch $(Build.SourceBranch)"
+      Write-Host "Source Branch Name $(Build.SourceBranchName)"
+      Write-Host "Buildnumber $(Build.BuildNumber)"
+      $branch = '$(Build.SourceBranch)'
+      $buildNumber = '$(Build.BuildNumber)'
+      $versionString = $buildNumber
+      if ($buildNumber.Contains("-")) {
+        $versionString = $buildNumber.SubString(0, $buildNumber.IndexOf("-"))
+      }
+      $versionArray = $versionString.Split(".")
+      $major = [int]$versionArray[0]
+      $minor = [int]$versionArray[1]
+      $build = [int]$versionArray[2]
+      $revision = [int]$versionArray[3]
+      $buildNumberShort = "$major.$minor.$build"
+      $buildNumberLong = "$major.$minor.$build.$revision"
+
+      if ($branch.StartsWith("refs/heads/test/")) {
+        Write-host "Branch is test branch"
+        $branchName = '$(Build.SourceBranchName)'
+        $versionString = $branchName.SubString(0, $branchName.IndexOf("-"))
+        $newBranchName = $branchName.SubString($branchName.IndexOf("-") + 1)
+        Write-Host "Version string is $versionString"
+        $versionArray = $versionString.Split(".")
+        $major = [int]$versionArray[0]
+        $minor = [int]$versionArray[1]
+        $buildNumberShort = "$major.$minor.$build"
+        $buildNumberLong = "$major.$minor.$build.$revision"
+        $fullBuildNumber = "$major.$minor.$build.$revision-$newBranchName"
+        Write-Host "Setting build number to $buildNumberLong"
+        Write-Host "##vso[build.updatebuildnumber]$fullBuildNumber"
+      }
+
+      if ($branch.StartsWith("refs/tags/r")) {
+        Write-host "Branch is release tag"
+        $branchName = '$(Build.SourceBranchName)'
+        $versionString = $branchName.SubString(1)
+        $versionArray = $versionString.Split(".")
+        $major = [int]$versionArray[0]
+        $minor = [int]$versionArray[1]
+        $build = [int]$versionArray[2]
+        $buildNumberShort = "$major.$minor.$build"
+        $buildNumberLong = "$major.$minor.$build.0"
+        Write-Host "Setting build number to $buildNumberLong"
+        Write-Host "##vso[build.updatebuildnumber]$buildNumberLong"
+      }
+      Write-Host "Setting build number short to '$buildNumberShort', build number long to '$buildNumberLong'"
+      Write-Host "##vso[task.setvariable variable=MajorVersion;]$major"
+      Write-Host "##vso[task.setvariable variable=MinorVersion;]$minor"
+      Write-Host "##vso[task.setvariable variable=BuildNumberShort;]$buildNumberShort"
+      Write-Host "##vso[task.setvariable variable=BuildNumberLong;]$buildNumberLong"
+  displayName: 'Set build number'
