@@ -1,9 +1,9 @@
 steps:
   - task: CopyFiles@2
-    displayName: 'Copy plugin zip to artifacts'
+    displayName: 'Copy plugin archive to artifacts'
     inputs:
       SourceFolder: $(Build.ArtifactStagingDirectory)
-      Contents: '**/*.zip'
+      Contents: '**/*.tar.gz'
       TargetFolder: $(Build.ArtifactStagingDirectory)/plugin
       flattenFolders: true
 

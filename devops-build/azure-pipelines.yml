@@ -94,12 +94,13 @@ stages:
               TargetFolder: $(Build.SourcesDirectory)/dist
 
           - task: ArchiveFiles@2
-            displayName: Create plugin zip
+            displayName: Create plugin archive
             inputs:
               rootFolderOrFile: $(Build.SourcesDirectory)/dist
               includeRootFolder: false
-              archiveType: zip
-              archiveFile: $(Build.ArtifactStagingDirectory)/$(pluginId)-$(BuildNumberShort).zip
+              archiveType: tar
+              tarCompression: gz
+              archiveFile: $(Build.ArtifactStagingDirectory)/$(pluginId)-$(BuildNumberShort).tar.gz
               replaceExistingArchive: true
 
           - template: handle-artifacts.yml
