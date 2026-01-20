@@ -5,7 +5,7 @@ steps:
       targetType: 'inline'
       script: |
         $source = "$(Build.SourcesDirectory)/dist/*"
-        $destination = "$(Build.ArtifactStagingDirectory)/$(pluginId)-$(BuildNumberShort).zip"
+        $destination = "$(Build.ArtifactStagingDirectory)/$(pluginId)-$(Build.BuildNumber).zip"
         Compress-Archive -Path $source -DestinationPath $destination -Force
         Write-Host "Created archive: $destination"
 
