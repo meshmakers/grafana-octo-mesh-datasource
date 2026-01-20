@@ -1,11 +1,13 @@
 steps:
-  - task: CopyFiles@2
-    displayName: 'Copy plugin archive to artifacts'
+  - task: PowerShell@2
+    displayName: 'Create plugin zip archive'
     inputs:
-      SourceFolder: $(Build.ArtifactStagingDirectory)
-      Contents: '**/*.tar.gz'
-      TargetFolder: $(Build.ArtifactStagingDirectory)/plugin
-      flattenFolders: true
+      targetType: 'inline'
+      script: |
+        $source = "$(Build.SourcesDirectory)/dist/*"
+        $destination = "$(Build.ArtifactStagingDirectory)/$(pluginId)-$(BuildNumberShort).zip"
+        Compress-Archive -Path $source -DestinationPath $destination -Force
+        Write-Host "Created archive: $destination"
 
   - task: PowerShell@2
     displayName: 'Create version info file'
