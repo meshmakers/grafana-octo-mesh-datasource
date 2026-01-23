@@ -22,9 +22,12 @@ import {
   FieldFilterDto,
   RuntimeQueryResponse,
   QueryColumnsResponse,
+  CkTypeAttributeDto,
+  CkTypeAttributesResponse,
 } from './types';
 import { QueryType, getQueryType, supportsTimeFilter } from './queryTypes';
 import { buildQueryPayload } from './graphql/queryBuilder';
+import { convertUserFiltersToDto } from './utils/filterConverter';
 import { lastValueFrom } from 'rxjs';
 
 export class DataSource extends DataSourceApi<OctoMeshQuery, OctoMeshDataSourceOptions> {
@@ -54,25 +57,42 @@ export class DataSource extends DataSourceApi<OctoMeshQuery, OctoMeshDataSourceO
       const queryType = getQueryType(target.queryCkTypeId);
 
       // Build time range filters if timeFilterColumn is set and query type supports it
-      const fieldFilters: FieldFilterDto[] = [];
+      const timeFilters: FieldFilterDto[] = [];
       if (target.timeFilterColumn && range && supportsTimeFilter(queryType)) {
-        fieldFilters.push({
+        timeFilters.push({
           attributePath: target.timeFilterColumn,
           operator: 'GREATER_EQUAL_THAN',
           comparisonValue: range.from.toISOString(),
         });
-        fieldFilters.push({
+        timeFilters.push({
           attributePath: target.timeFilterColumn,
           operator: 'LESS_EQUAL_THAN',
           comparisonValue: range.to.toISOString(),
         });
       }
 
+      // Convert user-defined field filters to DTOs
+      let userFilters: FieldFilterDto[] = [];
+      if (target.fieldFilters && target.fieldFilters.length > 0) {
+        if (target.querySourceTypeId) {
+          // Use source entity attributes for type conversion (correct for aggregation queries)
+          const sourceAttributes = await this.fetchTypeAttributes(target.querySourceTypeId);
+          userFilters = convertUserFiltersToDto(target.fieldFilters, sourceAttributes);
+        } else {
+          // Fallback to result columns for Simple queries or when source type not set
+          const columns = await this.fetchQueryColumns(target.queryRtId!);
+          userFilters = convertUserFiltersToDto(target.fieldFilters, columns);
+        }
+      }
+
+      // Merge time filters and user filters (implicit AND logic)
+      const allFilters = [...timeFilters, ...userFilters];
+
       const result = await this.executeQuery(
         target.queryRtId!,
         target.maxRows ?? 1000,
         queryType,
-        fieldFilters.length > 0 ? fieldFilters : undefined
+        allFilters.length > 0 ? allFilters : undefined
       );
 
       return this.toDataFrame(target, result);
@@ -160,6 +180,43 @@ export class DataSource extends DataSourceApi<OctoMeshQuery, OctoMeshDataSourceO
     );
 
     return response.data.data?.runtime?.runtimeQuery?.items?.[0]?.columns ?? [];
+  }
+
+  /**
+   * Fetch available attributes for a CK type (for filter dropdowns)
+   *
+   * Uses the Construction Kit schema to get source entity attributes,
+   * which are needed for filtering before aggregation.
+   */
+  async fetchTypeAttributes(rtCkTypeId: string): Promise<CkTypeAttributeDto[]> {
+    if (!this.tenantId) {
+      return [];
+    }
+
+    const query = `query($rtCkId: String!) {
+      constructionKit {
+        types(rtCkId: $rtCkId) {
+          items {
+            availableQueryColumns(first: 100) {
+              items {
+                attributePath
+                attributeValueType
+              }
+            }
+          }
+        }
+      }
+    }`;
+
+    const response = await lastValueFrom(
+      getBackendSrv().fetch<CkTypeAttributesResponse>({
+        url: `${this.baseUrl}/tenants/${this.tenantId}/graphql`,
+        method: 'POST',
+        data: { query, variables: { rtCkId: rtCkTypeId } },
+      })
+    );
+
+    return response.data.data?.constructionKit?.types?.items?.[0]?.availableQueryColumns?.items ?? [];
   }
 
   /**

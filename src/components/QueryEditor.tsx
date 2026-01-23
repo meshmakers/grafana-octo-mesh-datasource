@@ -1,10 +1,12 @@
-import React, { useEffect, useState, useMemo } from 'react';
-import { Badge, Combobox, FieldSet, InlineField, Input, Stack } from '@grafana/ui';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import { Badge, Button, Combobox, FieldSet, InlineField, Input, Stack } from '@grafana/ui';
 import { QueryEditorProps } from '@grafana/data';
 import { ComboboxOption } from '@grafana/ui/dist/types/components/Combobox/types';
 import { DataSource } from '../datasource';
-import { OctoMeshDataSourceOptions, OctoMeshQuery, SystemQueryDto, QueryColumnDto } from '../types';
+import { OctoMeshDataSourceOptions, OctoMeshQuery, SystemQueryDto, QueryColumnDto, UserFieldFilter, CkTypeAttributeDto } from '../types';
 import { QueryType, getQueryType, supportsTimeFilter, getQueryTypeLabel } from '../queryTypes';
+import { FilterRow } from './FilterRow';
+import { generateFilterId } from '../utils/filterConverter';
 
 type Props = QueryEditorProps<DataSource, OctoMeshQuery, OctoMeshDataSourceOptions>;
 
@@ -25,8 +27,10 @@ function getQueryTypeBadgeColor(queryType: QueryType): 'blue' | 'green' | 'purpl
 export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) {
   const [systemQueries, setSystemQueries] = useState<SystemQueryDto[]>([]);
   const [columns, setColumns] = useState<QueryColumnDto[]>([]);
+  const [sourceAttributes, setSourceAttributes] = useState<CkTypeAttributeDto[]>([]);
   const [loading, setLoading] = useState(false);
   const [columnsLoading, setColumnsLoading] = useState(false);
+  const [attributesLoading, setAttributesLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Load SystemQueries on mount
@@ -54,7 +58,7 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
     loadQueries();
   }, [datasource]);
 
-  // Load columns when query changes
+  // Load columns when query changes (for result preview)
   useEffect(() => {
     if (!query.queryRtId) {
       setColumns([]);
@@ -68,14 +72,31 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
       .finally(() => setColumnsLoading(false));
   }, [query.queryRtId, datasource]);
 
+  // Load source attributes when querySourceTypeId changes (for filter dropdowns)
+  useEffect(() => {
+    if (!query.querySourceTypeId) {
+      setSourceAttributes([]);
+      return;
+    }
+    setAttributesLoading(true);
+    datasource
+      .fetchTypeAttributes(query.querySourceTypeId)
+      .then(setSourceAttributes)
+      .catch(() => setSourceAttributes([]))
+      .finally(() => setAttributesLoading(false));
+  }, [query.querySourceTypeId, datasource]);
+
   // Determine query type from cached queryCkTypeId
   const queryType = useMemo(() => getQueryType(query.queryCkTypeId), [query.queryCkTypeId]);
 
   // Check if time filtering is supported for this query type
   const showTimeFilter = supportsTimeFilter(queryType);
 
-  // DateTime columns for time filter dropdown
-  const dateTimeColumns = columns.filter((c) => {
+  // DateTime attributes for time filter dropdown (from source entity type)
+  // Use sourceAttributes when available (for proper filtering on source entity attributes)
+  // Fall back to columns for Simple queries or when sourceAttributes not yet loaded
+  const attributesForFiltering = sourceAttributes.length > 0 ? sourceAttributes : columns;
+  const dateTimeAttributes = attributesForFiltering.filter((c) => {
     const lower = c.attributeValueType.toLowerCase();
     return lower === 'datetime' || lower === 'date_time';
   });
@@ -90,7 +111,9 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
       queryRtId: option.value,
       queryName: selected?.name,
       queryCkTypeId: selected?.ckTypeId, // Cache the query definition type (e.g., "System/SimpleRtQuery")
+      querySourceTypeId: selected?.queryCkTypeId, // Cache the source entity type (e.g., "Industry.Basic/Alarm")
       timeFilterColumn: undefined, // Reset time filter when query changes
+      fieldFilters: [], // Reset filters when query changes (source attributes will be different)
     });
     onRunQuery();
   };
@@ -104,6 +127,38 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
     onRunQuery();
   };
 
+  // Filter handlers
+  const onAddFilter = useCallback(() => {
+    const newFilter: UserFieldFilter = {
+      id: generateFilterId(),
+    };
+    onChange({
+      ...query,
+      fieldFilters: [...(query.fieldFilters ?? []), newFilter],
+    });
+  }, [query, onChange]);
+
+  const onFilterChange = useCallback(
+    (id: string, updated: UserFieldFilter) => {
+      onChange({
+        ...query,
+        fieldFilters: (query.fieldFilters ?? []).map((f) => (f.id === id ? updated : f)),
+      });
+    },
+    [query, onChange]
+  );
+
+  const onRemoveFilter = useCallback(
+    (id: string) => {
+      onChange({
+        ...query,
+        fieldFilters: (query.fieldFilters ?? []).filter((f) => f.id !== id),
+      });
+      onRunQuery();
+    },
+    [query, onChange, onRunQuery]
+  );
+
   const queryOptions: Array<ComboboxOption<string>> = systemQueries.map((q) => ({
     label: q.name,
     value: q.rtId,
@@ -112,7 +167,7 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
 
   const timeFilterOptions: Array<ComboboxOption<string>> = [
     { label: 'None', value: '' },
-    ...dateTimeColumns.map((c) => ({ label: c.attributePath, value: c.attributePath })),
+    ...dateTimeAttributes.map((c) => ({ label: c.attributePath, value: c.attributePath })),
   ];
 
   return (
@@ -165,14 +220,14 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
             <InlineField
               label="Time Filter Column"
               labelWidth={20}
-              tooltip="Apply Grafana time range to this DateTime column"
+              tooltip="Apply Grafana time range to this DateTime attribute from source entity"
             >
               <Combobox
                 id="query-editor-time-filter"
                 options={timeFilterOptions}
                 value={query.timeFilterColumn ?? ''}
                 onChange={onTimeFilterColumnChange}
-                loading={columnsLoading}
+                loading={attributesLoading || columnsLoading}
                 width={24}
               />
             </InlineField>
@@ -185,6 +240,45 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
             </div>
           )}
         </Stack>
+      )}
+
+      {/* Field Filters section - only show when query is selected and source attributes are loaded */}
+      {query.queryRtId && attributesForFiltering.length > 0 && (
+        <FieldSet
+          label={`Field Filters${query.fieldFilters?.length ? ` (${query.fieldFilters.length})` : ''}`}
+        >
+          <Stack direction="column" gap={1}>
+            {(query.fieldFilters ?? []).map((filter) => (
+              <FilterRow
+                key={filter.id}
+                filter={filter}
+                columns={attributesForFiltering}
+                onChange={(updated) => onFilterChange(filter.id, updated)}
+                onRemove={() => onRemoveFilter(filter.id)}
+              />
+            ))}
+            <div>
+              <Button
+                variant="secondary"
+                size="sm"
+                icon="plus"
+                onClick={onAddFilter}
+              >
+                Add Filter
+              </Button>
+              {(query.fieldFilters?.length ?? 0) > 0 && (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={onRunQuery}
+                  style={{ marginLeft: '8px' }}
+                >
+                  Apply Filters
+                </Button>
+              )}
+            </div>
+          </Stack>
+        </FieldSet>
       )}
 
       {/* Columns preview */}

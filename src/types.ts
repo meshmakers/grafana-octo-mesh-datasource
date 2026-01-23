@@ -2,6 +2,45 @@ import { DataSourceJsonData } from '@grafana/data';
 import { DataQuery } from '@grafana/schema';
 
 /**
+ * All supported filter operators for field filtering
+ */
+export type FilterOperator =
+  | 'EQUALS'
+  | 'NOT_EQUALS'
+  | 'LESS_THAN'
+  | 'GREATER_THAN'
+  | 'LESS_EQUAL_THAN'
+  | 'GREATER_EQUAL_THAN'
+  | 'IN'
+  | 'NOT_IN'
+  | 'LIKE'
+  | 'MATCH_REGEX'
+  | 'CONTAINS'
+  | 'STARTS_WITH'
+  | 'ENDS_WITH'
+  | 'BETWEEN'
+  | 'IS_NULL'
+  | 'IS_NOT_NULL'
+  | 'ANY_EQ'
+  | 'ANY_LIKE';
+
+/**
+ * User-defined field filter (UI representation)
+ */
+export interface UserFieldFilter {
+  /** Unique identifier for this filter row */
+  id: string;
+  /** Column/attribute path to filter on */
+  attributePath?: string;
+  /** Filter operator */
+  operator?: FilterOperator;
+  /** Primary comparison value */
+  comparisonValue?: string;
+  /** Secondary comparison value (for BETWEEN operator) */
+  comparisonValueEnd?: string;
+}
+
+/**
  * Query model for OctoMesh datasource
  */
 export interface OctoMeshQuery extends DataQuery {
@@ -14,10 +53,17 @@ export interface OctoMeshQuery extends DataQuery {
    * This determines the query type and is cached from SystemQueryDto.ckTypeId
    */
   queryCkTypeId?: string;
+  /**
+   * CK Type ID of the source entity type (e.g., "Industry.Basic/Alarm")
+   * Used to fetch available attributes for filtering
+   */
+  querySourceTypeId?: string;
   /** Maximum number of rows to return */
   maxRows?: number;
   /** DateTime column to filter by Grafana time range (not available for GroupedAggregation queries) */
   timeFilterColumn?: string;
+  /** User-defined field filters applied before aggregation */
+  fieldFilters?: UserFieldFilter[];
 }
 
 export const DEFAULT_QUERY: Partial<OctoMeshQuery> = {
@@ -132,11 +178,11 @@ export interface QueryRowDto {
 }
 
 /**
- * Field filter for query execution
+ * Field filter for query execution (GraphQL DTO)
  */
 export interface FieldFilterDto {
   attributePath: string;
-  operator: 'EQUALS' | 'NOT_EQUALS' | 'LESS_THAN' | 'LESS_EQUAL_THAN' | 'GREATER_THAN' | 'GREATER_EQUAL_THAN' | 'IN' | 'NOT_IN' | 'LIKE' | 'MATCH_REGEX' | 'ANY_EQ' | 'ANY_LIKE';
+  operator: FilterOperator;
   comparisonValue: unknown;
 }
 
@@ -170,6 +216,32 @@ export interface QueryColumnsResponse {
       runtimeQuery: {
         items: Array<{
           columns: QueryColumnDto[];
+        }>;
+      };
+    };
+  };
+}
+
+/**
+ * Attribute definition from Construction Kit type schema
+ * Used for fetching source entity attributes for filtering
+ */
+export interface CkTypeAttributeDto {
+  attributePath: string;
+  attributeValueType: string;
+}
+
+/**
+ * GraphQL response for CK type attributes query
+ */
+export interface CkTypeAttributesResponse {
+  data: {
+    constructionKit: {
+      types: {
+        items: Array<{
+          availableQueryColumns: {
+            items: CkTypeAttributeDto[];
+          };
         }>;
       };
     };
