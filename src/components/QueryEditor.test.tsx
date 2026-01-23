@@ -18,7 +18,7 @@ describe('QueryEditor', () => {
     const onChange = jest.fn();
 
     const mockQueries: SystemQueryDto[] = [
-        { rtId: 'q1', rtWellKnownName: 'QueryOne', name: 'Query One' },
+        { rtId: 'q1', name: 'Query One', description: 'Description', ckTypeId: 'System/SimpleRtQuery', queryCkTypeId: 'Industry.Basic/Alarm' },
     ];
 
     const mockColumns: QueryColumnDto[] = [

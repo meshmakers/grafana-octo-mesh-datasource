@@ -70,7 +70,7 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
     onChange({
       ...query,
       queryRtId: option.value,
-      queryName: selected?.name ?? selected?.rtWellKnownName,
+      queryName: selected?.name,
       timeFilterColumn: undefined, // Reset time filter when query changes
     });
     onRunQuery();
@@ -131,9 +131,9 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
   };
 
   const queryOptions: Array<ComboboxOption<string>> = systemQueries.map((q) => ({
-    label: q.name || q.rtWellKnownName,
+    label: q.name,
     value: q.rtId,
-    description: q.rtWellKnownName,
+    description: q.queryCkTypeId,
   }));
 
   const timeFilterOptions: Array<ComboboxOption<string>> = [

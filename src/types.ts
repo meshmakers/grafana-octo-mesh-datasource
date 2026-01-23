@@ -82,21 +82,23 @@ export interface TenantsResponse {
 }
 
 /**
- * SystemQuery data from GraphQL runtime.systemQuery
+ * SystemPersistentQuery data from GraphQL runtime.systemPersistentQuery
  */
 export interface SystemQueryDto {
   rtId: string;
-  rtWellKnownName: string;
   name: string;
+  description: string;
+  ckTypeId: string;
+  queryCkTypeId: string;
 }
 
 /**
- * GraphQL response for systemQuery query
+ * GraphQL response for systemPersistentQuery query
  */
 export interface SystemQueryResponse {
   data: {
     runtime: {
-      systemQuery: {
+      systemPersistentQuery: {
         totalCount: number;
         items: SystemQueryDto[];
       };

@@ -110,12 +110,14 @@ export class DataSource extends DataSourceApi<OctoMeshQuery, OctoMeshDataSourceO
 
     const query = `query {
       runtime {
-        systemQuery {
+        systemPersistentQuery {
           totalCount
           items {
             rtId
-            rtWellKnownName
             name
+            description
+            ckTypeId
+            queryCkTypeId
           }
         }
       }
@@ -129,7 +131,7 @@ export class DataSource extends DataSourceApi<OctoMeshQuery, OctoMeshDataSourceO
       })
     );
 
-    return response.data.data?.runtime?.systemQuery?.items ?? [];
+    return response.data.data?.runtime?.systemPersistentQuery?.items ?? [];
   }
 
   /**
@@ -218,11 +220,13 @@ export class DataSource extends DataSourceApi<OctoMeshQuery, OctoMeshDataSourceO
                 rows(first: $first, fieldFilter: $fieldFilter) {
                   totalCount
                   items {
-                    rtId
-                    cells {
-                      items {
-                        attributePath
-                        value
+                    ... on RtSimpleQueryRow {
+                      rtId
+                      cells {
+                        items {
+                          attributePath
+                          value
+                        }
                       }
                     }
                   }
