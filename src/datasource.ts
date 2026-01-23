@@ -282,25 +282,23 @@ export class DataSource extends DataSourceApi<OctoMeshQuery, OctoMeshDataSourceO
 
   /**
    * Map OctoMesh attribute type to Grafana FieldType
+   * Uses case-insensitive comparison since backend returns UPPERCASE types
+   * (e.g., "INTEGER", "DOUBLE") for aggregation queries
    */
   private mapAttributeType(octoType: string): FieldType {
-    switch (octoType) {
-      case 'Integer':
-      case 'Decimal':
-      case 'Double':
+    const lower = octoType.toLowerCase();
+
+    switch (lower) {
+      case 'integer':
+      case 'decimal':
+      case 'double':
         return FieldType.number;
-      case 'DateTime':
       case 'datetime':
-      case 'DATE_TIME':
+      case 'date_time':
         return FieldType.time;
-      case 'Boolean':
+      case 'boolean':
         return FieldType.boolean;
       default:
-        // Try case-insensitive check for datetime or date_time
-        const lower = octoType.toLowerCase();
-        if (lower === 'datetime' || lower === 'date_time') {
-          return FieldType.time;
-        }
         return FieldType.string;
     }
   }

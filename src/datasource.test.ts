@@ -7,7 +7,7 @@ import {
     CkTypeAttributesResponse,
     QueryColumnsResponse,
 } from './types';
-import { DataSourceInstanceSettings, dateTime } from '@grafana/data';
+import { DataSourceInstanceSettings, dateTime, FieldType } from '@grafana/data';
 
 import { of } from 'rxjs';
 
@@ -433,6 +433,371 @@ describe('DataSource', () => {
             expect(fetchMock).toHaveBeenCalledTimes(1);
             const callArg = fetchMock.mock.calls[0][0];
             expect(callArg.data.variables.rtId).toBe('query-1');
+        });
+    });
+
+    describe('attribute type mapping', () => {
+        it('should map UPPERCASE INTEGER to FieldType.number', async () => {
+            const runtimeQueryMock: RuntimeQueryResponse = {
+                data: {
+                    runtime: {
+                        runtimeQuery: {
+                            items: [
+                                {
+                                    queryRtId: 'query-1',
+                                    associatedCkTypeId: 'System/AggregationRtQuery',
+                                    columns: [
+                                        { attributePath: 'rtId', attributeValueType: 'INTEGER', aggregationType: 'COUNT' },
+                                    ],
+                                    rows: {
+                                        items: [{ cells: { items: [{ attributePath: 'rtId', value: 5 }] } }],
+                                        totalCount: 1,
+                                    },
+                                },
+                            ],
+                        },
+                    },
+                },
+            };
+
+            fetchMock.mockReturnValueOnce(of({ data: runtimeQueryMock }));
+
+            const options: any = {
+                range: {
+                    from: dateTime('2023-01-01T00:00:00Z'),
+                    to: dateTime('2023-01-02T00:00:00Z'),
+                    raw: { from: '2023-01-01T00:00:00Z', to: '2023-01-02T00:00:00Z' },
+                },
+                targets: [{ refId: 'A', queryRtId: 'query-1' } as OctoMeshQuery],
+            };
+
+            const result = await ds.query(options);
+
+            expect(result.data).toHaveLength(1);
+            const frame = result.data[0];
+            expect(frame.fields).toHaveLength(1);
+            expect(frame.fields[0].type).toBe(FieldType.number);
+            expect(frame.fields[0].values[0]).toBe(5);
+        });
+
+        it('should map UPPERCASE DOUBLE to FieldType.number', async () => {
+            const runtimeQueryMock: RuntimeQueryResponse = {
+                data: {
+                    runtime: {
+                        runtimeQuery: {
+                            items: [
+                                {
+                                    queryRtId: 'query-1',
+                                    associatedCkTypeId: 'System/AggregationRtQuery',
+                                    columns: [
+                                        { attributePath: 'avgValue', attributeValueType: 'DOUBLE', aggregationType: 'AVG' },
+                                    ],
+                                    rows: {
+                                        items: [{ cells: { items: [{ attributePath: 'avgValue', value: 3.14159 }] } }],
+                                        totalCount: 1,
+                                    },
+                                },
+                            ],
+                        },
+                    },
+                },
+            };
+
+            fetchMock.mockReturnValueOnce(of({ data: runtimeQueryMock }));
+
+            const options: any = {
+                range: {
+                    from: dateTime('2023-01-01T00:00:00Z'),
+                    to: dateTime('2023-01-02T00:00:00Z'),
+                    raw: { from: '2023-01-01T00:00:00Z', to: '2023-01-02T00:00:00Z' },
+                },
+                targets: [{ refId: 'A', queryRtId: 'query-1' } as OctoMeshQuery],
+            };
+
+            const result = await ds.query(options);
+
+            expect(result.data).toHaveLength(1);
+            const frame = result.data[0];
+            expect(frame.fields).toHaveLength(1);
+            expect(frame.fields[0].type).toBe(FieldType.number);
+            expect(frame.fields[0].values[0]).toBe(3.14159);
+        });
+
+        it('should map UPPERCASE DECIMAL to FieldType.number', async () => {
+            const runtimeQueryMock: RuntimeQueryResponse = {
+                data: {
+                    runtime: {
+                        runtimeQuery: {
+                            items: [
+                                {
+                                    queryRtId: 'query-1',
+                                    associatedCkTypeId: 'System/AggregationRtQuery',
+                                    columns: [
+                                        { attributePath: 'total', attributeValueType: 'DECIMAL', aggregationType: 'SUM' },
+                                    ],
+                                    rows: {
+                                        items: [{ cells: { items: [{ attributePath: 'total', value: 123.45 }] } }],
+                                        totalCount: 1,
+                                    },
+                                },
+                            ],
+                        },
+                    },
+                },
+            };
+
+            fetchMock.mockReturnValueOnce(of({ data: runtimeQueryMock }));
+
+            const options: any = {
+                range: {
+                    from: dateTime('2023-01-01T00:00:00Z'),
+                    to: dateTime('2023-01-02T00:00:00Z'),
+                    raw: { from: '2023-01-01T00:00:00Z', to: '2023-01-02T00:00:00Z' },
+                },
+                targets: [{ refId: 'A', queryRtId: 'query-1' } as OctoMeshQuery],
+            };
+
+            const result = await ds.query(options);
+
+            expect(result.data).toHaveLength(1);
+            const frame = result.data[0];
+            expect(frame.fields).toHaveLength(1);
+            expect(frame.fields[0].type).toBe(FieldType.number);
+        });
+
+        it('should map PascalCase Integer to FieldType.number (backward compatibility)', async () => {
+            const runtimeQueryMock: RuntimeQueryResponse = {
+                data: {
+                    runtime: {
+                        runtimeQuery: {
+                            items: [
+                                {
+                                    queryRtId: 'query-1',
+                                    associatedCkTypeId: 'System/SimpleRtQuery',
+                                    columns: [{ attributePath: 'count', attributeValueType: 'Integer' }],
+                                    rows: {
+                                        items: [{ cells: { items: [{ attributePath: 'count', value: 42 }] } }],
+                                        totalCount: 1,
+                                    },
+                                },
+                            ],
+                        },
+                    },
+                },
+            };
+
+            fetchMock.mockReturnValueOnce(of({ data: runtimeQueryMock }));
+
+            const options: any = {
+                range: {
+                    from: dateTime('2023-01-01T00:00:00Z'),
+                    to: dateTime('2023-01-02T00:00:00Z'),
+                    raw: { from: '2023-01-01T00:00:00Z', to: '2023-01-02T00:00:00Z' },
+                },
+                targets: [{ refId: 'A', queryRtId: 'query-1' } as OctoMeshQuery],
+            };
+
+            const result = await ds.query(options);
+
+            expect(result.data).toHaveLength(1);
+            const frame = result.data[0];
+            expect(frame.fields[0].type).toBe(FieldType.number);
+        });
+
+        it('should map UPPERCASE STRING to FieldType.string', async () => {
+            const runtimeQueryMock: RuntimeQueryResponse = {
+                data: {
+                    runtime: {
+                        runtimeQuery: {
+                            items: [
+                                {
+                                    queryRtId: 'query-1',
+                                    associatedCkTypeId: 'System/SimpleRtQuery',
+                                    columns: [{ attributePath: 'name', attributeValueType: 'STRING' }],
+                                    rows: {
+                                        items: [{ cells: { items: [{ attributePath: 'name', value: 'test' }] } }],
+                                        totalCount: 1,
+                                    },
+                                },
+                            ],
+                        },
+                    },
+                },
+            };
+
+            fetchMock.mockReturnValueOnce(of({ data: runtimeQueryMock }));
+
+            const options: any = {
+                range: {
+                    from: dateTime('2023-01-01T00:00:00Z'),
+                    to: dateTime('2023-01-02T00:00:00Z'),
+                    raw: { from: '2023-01-01T00:00:00Z', to: '2023-01-02T00:00:00Z' },
+                },
+                targets: [{ refId: 'A', queryRtId: 'query-1' } as OctoMeshQuery],
+            };
+
+            const result = await ds.query(options);
+
+            expect(result.data).toHaveLength(1);
+            const frame = result.data[0];
+            expect(frame.fields[0].type).toBe(FieldType.string);
+        });
+
+        it('should map UPPERCASE BOOLEAN to FieldType.boolean', async () => {
+            const runtimeQueryMock: RuntimeQueryResponse = {
+                data: {
+                    runtime: {
+                        runtimeQuery: {
+                            items: [
+                                {
+                                    queryRtId: 'query-1',
+                                    associatedCkTypeId: 'System/SimpleRtQuery',
+                                    columns: [{ attributePath: 'isActive', attributeValueType: 'BOOLEAN' }],
+                                    rows: {
+                                        items: [{ cells: { items: [{ attributePath: 'isActive', value: true }] } }],
+                                        totalCount: 1,
+                                    },
+                                },
+                            ],
+                        },
+                    },
+                },
+            };
+
+            fetchMock.mockReturnValueOnce(of({ data: runtimeQueryMock }));
+
+            const options: any = {
+                range: {
+                    from: dateTime('2023-01-01T00:00:00Z'),
+                    to: dateTime('2023-01-02T00:00:00Z'),
+                    raw: { from: '2023-01-01T00:00:00Z', to: '2023-01-02T00:00:00Z' },
+                },
+                targets: [{ refId: 'A', queryRtId: 'query-1' } as OctoMeshQuery],
+            };
+
+            const result = await ds.query(options);
+
+            expect(result.data).toHaveLength(1);
+            const frame = result.data[0];
+            expect(frame.fields[0].type).toBe(FieldType.boolean);
+            expect(frame.fields[0].values[0]).toBe(true);
+        });
+
+        it('should map UPPERCASE DATETIME to FieldType.time', async () => {
+            const runtimeQueryMock: RuntimeQueryResponse = {
+                data: {
+                    runtime: {
+                        runtimeQuery: {
+                            items: [
+                                {
+                                    queryRtId: 'query-1',
+                                    associatedCkTypeId: 'System/SimpleRtQuery',
+                                    columns: [{ attributePath: 'createdAt', attributeValueType: 'DATETIME' }],
+                                    rows: {
+                                        items: [{ cells: { items: [{ attributePath: 'createdAt', value: '2023-01-15T10:30:00Z' }] } }],
+                                        totalCount: 1,
+                                    },
+                                },
+                            ],
+                        },
+                    },
+                },
+            };
+
+            fetchMock.mockReturnValueOnce(of({ data: runtimeQueryMock }));
+
+            const options: any = {
+                range: {
+                    from: dateTime('2023-01-01T00:00:00Z'),
+                    to: dateTime('2023-01-02T00:00:00Z'),
+                    raw: { from: '2023-01-01T00:00:00Z', to: '2023-01-02T00:00:00Z' },
+                },
+                targets: [{ refId: 'A', queryRtId: 'query-1' } as OctoMeshQuery],
+            };
+
+            const result = await ds.query(options);
+
+            expect(result.data).toHaveLength(1);
+            const frame = result.data[0];
+            expect(frame.fields[0].type).toBe(FieldType.time);
+        });
+
+        it('should map DATE_TIME (underscore variant) to FieldType.time', async () => {
+            const runtimeQueryMock: RuntimeQueryResponse = {
+                data: {
+                    runtime: {
+                        runtimeQuery: {
+                            items: [
+                                {
+                                    queryRtId: 'query-1',
+                                    associatedCkTypeId: 'System/SimpleRtQuery',
+                                    columns: [{ attributePath: 'updatedAt', attributeValueType: 'DATE_TIME' }],
+                                    rows: {
+                                        items: [{ cells: { items: [{ attributePath: 'updatedAt', value: '2023-01-15T10:30:00Z' }] } }],
+                                        totalCount: 1,
+                                    },
+                                },
+                            ],
+                        },
+                    },
+                },
+            };
+
+            fetchMock.mockReturnValueOnce(of({ data: runtimeQueryMock }));
+
+            const options: any = {
+                range: {
+                    from: dateTime('2023-01-01T00:00:00Z'),
+                    to: dateTime('2023-01-02T00:00:00Z'),
+                    raw: { from: '2023-01-01T00:00:00Z', to: '2023-01-02T00:00:00Z' },
+                },
+                targets: [{ refId: 'A', queryRtId: 'query-1' } as OctoMeshQuery],
+            };
+
+            const result = await ds.query(options);
+
+            expect(result.data).toHaveLength(1);
+            const frame = result.data[0];
+            expect(frame.fields[0].type).toBe(FieldType.time);
+        });
+
+        it('should map unknown types to FieldType.string (default)', async () => {
+            const runtimeQueryMock: RuntimeQueryResponse = {
+                data: {
+                    runtime: {
+                        runtimeQuery: {
+                            items: [
+                                {
+                                    queryRtId: 'query-1',
+                                    associatedCkTypeId: 'System/SimpleRtQuery',
+                                    columns: [{ attributePath: 'customField', attributeValueType: 'UNKNOWN_TYPE' }],
+                                    rows: {
+                                        items: [{ cells: { items: [{ attributePath: 'customField', value: 'some value' }] } }],
+                                        totalCount: 1,
+                                    },
+                                },
+                            ],
+                        },
+                    },
+                },
+            };
+
+            fetchMock.mockReturnValueOnce(of({ data: runtimeQueryMock }));
+
+            const options: any = {
+                range: {
+                    from: dateTime('2023-01-01T00:00:00Z'),
+                    to: dateTime('2023-01-02T00:00:00Z'),
+                    raw: { from: '2023-01-01T00:00:00Z', to: '2023-01-02T00:00:00Z' },
+                },
+                targets: [{ refId: 'A', queryRtId: 'query-1' } as OctoMeshQuery],
+            };
+
+            const result = await ds.query(options);
+
+            expect(result.data).toHaveLength(1);
+            const frame = result.data[0];
+            expect(frame.fields[0].type).toBe(FieldType.string);
         });
     });
 });
