@@ -70,6 +70,39 @@ This starts Grafana Enterprise via Docker Compose with:
 | `npm run lint:fix` | Auto-fix lint issues |
 | `npm run e2e` | Run Playwright E2E tests |
 
+## Reproducing CI Builds Locally
+
+**Important:** The development build (`npm run dev`) does not catch all errors that CI catches. Before committing, always validate your changes with the full CI pipeline.
+
+### Quick Local Validation
+
+Run these commands in order (same as CI):
+
+```bash
+npm run typecheck   # TypeScript strict checking - catches unused imports, type errors
+npm run lint        # ESLint - catches code style issues
+npm run test:ci     # Unit tests
+npm run build       # Production build
+```
+
+If any step fails, the CI build will also fail.
+
+### Full CI Reproduction with Docker
+
+For an exact CI reproduction:
+
+```bash
+# Build using the same Docker environment as CI
+docker build -f devops-build/Dockerfile.build --target build .
+```
+
+### Why `npm run dev` Doesn't Catch All Errors
+
+- `npm run dev` uses webpack with swc-loader for fast transpilation
+- swc-loader does NOT perform TypeScript type checking
+- `npm run typecheck` runs the full TypeScript compiler (`tsc --noEmit`)
+- TypeScript strict mode catches: unused imports, unused variables, type mismatches, etc.
+
 ## Testing
 
 ### Unit Tests

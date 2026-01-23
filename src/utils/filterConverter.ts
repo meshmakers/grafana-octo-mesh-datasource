@@ -1,4 +1,4 @@
-import { UserFieldFilter, FieldFilterDto, QueryColumnDto, FilterOperator } from '../types';
+import { UserFieldFilter, FieldFilterDto, QueryColumnDto } from '../types';
 import { requiresValue, requiresTwoValues, acceptsMultipleValues } from './filterOperators';
 
 /**
