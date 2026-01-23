@@ -22,9 +22,9 @@ import {
   FieldFilterDto,
   RuntimeQueryResponse,
   QueryColumnsResponse,
-  RuntimeQueryAggregationResponse,
-  ResultAggregationInputDto,
 } from './types';
+import { QueryType, getQueryType, supportsTimeFilter } from './queryTypes';
+import { buildQueryPayload } from './graphql/queryBuilder';
 import { lastValueFrom } from 'rxjs';
 
 export class DataSource extends DataSourceApi<OctoMeshQuery, OctoMeshDataSourceOptions> {
@@ -50,9 +50,12 @@ export class DataSource extends DataSourceApi<OctoMeshQuery, OctoMeshDataSourceO
     const { range } = options;
 
     const promises = options.targets.filter(this.filterQuery).map(async (target) => {
-      // Build time range filters if timeFilterColumn is set
+      // Determine query type from cached queryCkTypeId
+      const queryType = getQueryType(target.queryCkTypeId);
+
+      // Build time range filters if timeFilterColumn is set and query type supports it
       const fieldFilters: FieldFilterDto[] = [];
-      if (target.timeFilterColumn && range) {
+      if (target.timeFilterColumn && range && supportsTimeFilter(queryType)) {
         fieldFilters.push({
           attributePath: target.timeFilterColumn,
           operator: 'GREATER_EQUAL_THAN',
@@ -68,16 +71,8 @@ export class DataSource extends DataSourceApi<OctoMeshQuery, OctoMeshDataSourceO
       const result = await this.executeQuery(
         target.queryRtId!,
         target.maxRows ?? 1000,
-        fieldFilters.length > 0 ? fieldFilters : undefined,
-        target.applyAggregation,
-        target.aggregationGroupBy,
-        {
-          sum: target.aggregationSum,
-          avg: target.aggregationAvg,
-          min: target.aggregationMin,
-          max: target.aggregationMax,
-          count: target.aggregationCount,
-        }
+        queryType,
+        fieldFilters.length > 0 ? fieldFilters : undefined
       );
 
       return this.toDataFrame(target, result);
@@ -149,6 +144,7 @@ export class DataSource extends DataSourceApi<OctoMeshQuery, OctoMeshDataSourceO
             columns {
               attributePath
               attributeValueType
+              aggregationType
             }
           }
         }
@@ -186,187 +182,25 @@ export class DataSource extends DataSourceApi<OctoMeshQuery, OctoMeshDataSourceO
 
   /**
    * Execute a RuntimeQuery and return columns + rows
+   *
+   * Uses the query builder to construct the appropriate GraphQL query
+   * based on the query type (Simple, Aggregation, or GroupedAggregation).
    */
   async executeQuery(
     rtId: string,
     maxRows: number,
-    fieldFilter?: FieldFilterDto[],
-    applyAggregation?: boolean,
-    aggregationGroupBy?: string[],
-    aggregationFunctions?: {
-      sum?: string[];
-      avg?: string[];
-      min?: string[];
-      max?: string[];
-      count?: string[];
-    }
+    queryType: QueryType,
+    fieldFilter?: FieldFilterDto[]
   ): Promise<{ columns: QueryColumnDto[]; rows: QueryRowDto[]; totalCount: number }> {
-    const tenantId = this.tenantId;
+    const payload = buildQueryPayload(queryType, rtId, maxRows, fieldFilter);
+    const response = await this.doRequest<RuntimeQueryResponse>(payload, this.tenantId);
 
-    if (!applyAggregation) {
-      // Standard Row-based Query
-      const query = {
-        query: `
-        query($rtId: OctoObjectId!, $first: Int, $fieldFilter: [FieldFilter]) {
-          runtime {
-            runtimeQuery(rtId: $rtId) {
-              items {
-                queryRtId
-                associatedCkTypeId
-                columns {
-                  attributePath
-                  attributeValueType
-                }
-                rows(first: $first, fieldFilter: $fieldFilter) {
-                  totalCount
-                  items {
-                    ... on RtSimpleQueryRow {
-                      rtId
-                      cells {
-                        items {
-                          attributePath
-                          value
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      `,
-        variables: {
-          rtId,
-          first: maxRows,
-          fieldFilter,
-        },
-      };
-
-      const response = await this.doRequest<RuntimeQueryResponse>(query, tenantId);
-      const result = response.data?.runtime?.runtimeQuery?.items?.[0];
-      return {
-        columns: result?.columns ?? [],
-        rows: result?.rows?.items ?? [],
-        totalCount: result?.rows?.totalCount ?? 0,
-      };
-    } else {
-      // Aggregation Query with full statistics support
-      const query = {
-        query: `
-        query($rtId: OctoObjectId!, $aggregationInput: ResultAggregationInput!) {
-          runtime {
-            runtimeQuery(rtId: $rtId) {
-              items {
-                queryRtId
-                aggregations(aggregations: $aggregationInput) {
-                  items {
-                    groupBy {
-                      keys
-                      count
-                      countStatistics { attributePath value }
-                      minStatistics { attributePath value }
-                      maxStatistics { attributePath value }
-                      avgStatistics { attributePath value }
-                      sumStatistics { attributePath value }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-        `,
-        variables: {
-          rtId,
-          // fieldFilter is not supported on aggregations field level in current schema
-          aggregationInput: {
-            groupBy: {
-              groupByAttributePaths: aggregationGroupBy || [],
-              // resolveEnumValuesToNames defaults to true on backend
-              ...(aggregationFunctions?.count?.length && { countAttributePaths: aggregationFunctions.count }),
-              ...(aggregationFunctions?.sum?.length && { sumAttributePaths: aggregationFunctions.sum }),
-              ...(aggregationFunctions?.avg?.length && { avgAttributePaths: aggregationFunctions.avg }),
-              ...(aggregationFunctions?.min?.length && { minValueAttributePaths: aggregationFunctions.min }),
-              ...(aggregationFunctions?.max?.length && { maxValueAttributePaths: aggregationFunctions.max }),
-            },
-          } as ResultAggregationInputDto,
-        },
-      };
-
-      const response = await this.doRequest<RuntimeQueryAggregationResponse>(query, tenantId);
-      // The aggregations.items array contains one QueryAggregationResult per requested aggregation.
-      // Inside that, we have groupBy which is the list of groups.
-      // Usually there is only 1 item in aggregations.items if we sent 1 input.
-      const aggResult = response.data?.runtime?.runtimeQuery?.items?.[0]?.aggregations?.items?.[0];
-      const items = aggResult?.groupBy ?? [];
-
-      // Build columns: groupBy columns + Count + statistics columns
-      const columns: QueryColumnDto[] = (aggregationGroupBy || []).map(path => ({
-        attributePath: path,
-        attributeValueType: 'String' // Simplified, assumed string for keys
-      }));
-      columns.push({ attributePath: 'Count', attributeValueType: 'Integer' });
-
-      // Add columns for each requested aggregation function
-      const addStatColumns = (paths: string[] | undefined, suffix: string) => {
-        if (paths?.length) {
-          paths.forEach(path => {
-            columns.push({ attributePath: `${path}_${suffix}`, attributeValueType: 'Double' });
-          });
-        }
-      };
-      addStatColumns(aggregationFunctions?.sum, 'sum');
-      addStatColumns(aggregationFunctions?.avg, 'avg');
-      addStatColumns(aggregationFunctions?.min, 'min');
-      addStatColumns(aggregationFunctions?.max, 'max');
-      addStatColumns(aggregationFunctions?.count, 'count');
-
-      // Build rows with all statistics values
-      const rows: QueryRowDto[] = items.map((item, index) => {
-        const cells: Array<{ attributePath: string; value: unknown }> = [
-          // Group-by key values
-          ...item.keys.map((key, i) => ({
-            attributePath: aggregationGroupBy?.[i] || `key${i}`,
-            value: key
-          })),
-          // Count (always present)
-          { attributePath: 'Count', value: item.count }
-        ];
-
-        // Helper to add statistic values to cells
-        const addStatCells = (
-          stats: Array<{ attributePath: string; value: number | null }> | undefined,
-          suffix: string
-        ) => {
-          if (stats) {
-            stats.forEach(stat => {
-              cells.push({
-                attributePath: `${stat.attributePath}_${suffix}`,
-                value: stat.value
-              });
-            });
-          }
-        };
-
-        addStatCells(item.sumStatistics, 'sum');
-        addStatCells(item.avgStatistics, 'avg');
-        addStatCells(item.minStatistics, 'min');
-        addStatCells(item.maxStatistics, 'max');
-        addStatCells(item.countStatistics, 'count');
-
-        return {
-          rtId: `agg-${index}`,
-          cells: { items: cells }
-        };
-      });
-
-      return {
-        columns,
-        rows,
-        totalCount: items.length
-      };
-    }
+    const result = response.data?.runtime?.runtimeQuery?.items?.[0];
+    return {
+      columns: result?.columns ?? [],
+      rows: result?.rows?.items ?? [],
+      totalCount: result?.rows?.totalCount ?? 0,
+    };
   }
 
   /**

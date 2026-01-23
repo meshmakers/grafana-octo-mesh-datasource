@@ -9,24 +9,15 @@ export interface OctoMeshQuery extends DataQuery {
   queryRtId?: string;
   /** Display name of the selected query */
   queryName?: string;
+  /**
+   * CK Type ID of the query definition (e.g., "System/SimpleRtQuery", "System/AggregationRtQuery")
+   * This determines the query type and is cached from SystemQueryDto.ckTypeId
+   */
+  queryCkTypeId?: string;
   /** Maximum number of rows to return */
   maxRows?: number;
-  /** DateTime column to filter by Grafana time range */
+  /** DateTime column to filter by Grafana time range (not available for GroupedAggregation queries) */
   timeFilterColumn?: string;
-  /** Whether to apply aggregation (Group By) */
-  applyAggregation?: boolean;
-  /** Columns to group by when aggregation is enabled */
-  aggregationGroupBy?: string[];
-  /** Attribute paths to sum (aggregation) */
-  aggregationSum?: string[];
-  /** Attribute paths to average (aggregation) */
-  aggregationAvg?: string[];
-  /** Attribute paths to get minimum value (aggregation) */
-  aggregationMin?: string[];
-  /** Attribute paths to get maximum value (aggregation) */
-  aggregationMax?: string[];
-  /** Attribute paths to count non-null values (aggregation) */
-  aggregationCount?: string[];
 }
 
 export const DEFAULT_QUERY: Partial<OctoMeshQuery> = {
@@ -112,6 +103,8 @@ export interface SystemQueryResponse {
 export interface QueryColumnDto {
   attributePath: string;
   attributeValueType: string;
+  /** Aggregation type if this column is an aggregated value (e.g., 'Sum', 'Avg', 'Count') */
+  aggregationType?: string;
 }
 
 /**
@@ -124,9 +117,15 @@ export interface QueryCellDto {
 
 /**
  * Row in query results
+ *
+ * Note: rtId is only present for Simple queries.
+ * Aggregation and GroupedAggregation queries have ckTypeId instead.
  */
 export interface QueryRowDto {
-  rtId: string;
+  /** Runtime ID - only present for Simple queries */
+  rtId?: string;
+  /** CK Type ID - present for all row types */
+  ckTypeId?: string;
   cells: {
     items: QueryCellDto[];
   };
@@ -139,72 +138,6 @@ export interface FieldFilterDto {
   attributePath: string;
   operator: 'EQUALS' | 'NOT_EQUALS' | 'LESS_THAN' | 'LESS_EQUAL_THAN' | 'GREATER_THAN' | 'GREATER_EQUAL_THAN' | 'IN' | 'NOT_IN' | 'LIKE' | 'MATCH_REGEX' | 'ANY_EQ' | 'ANY_LIKE';
   comparisonValue: unknown;
-}
-
-/**
- * Field group-by aggregation input with all aggregation functions
- */
-export interface FieldGroupByAggregationInputDto {
-  groupByAttributePaths: string[];
-  resolveEnumValuesToNames?: boolean;
-  countAttributePaths?: string[];
-  sumAttributePaths?: string[];
-  avgAttributePaths?: string[];
-  minValueAttributePaths?: string[];
-  maxValueAttributePaths?: string[];
-}
-
-/**
- * Aggregation input for runtimeQuery
- */
-export interface ResultAggregationInputDto {
-  groupBy: FieldGroupByAggregationInputDto;
-}
-
-/**
- * Statistics result for an aggregated attribute
- */
-export interface StatisticsResultDto {
-  attributePath: string;
-  value: number | null;
-}
-
-/**
- * Field aggregation result with all statistics
- */
-export interface FieldAggregationResultDto {
-  keys: unknown[];
-  count: number;
-  countStatistics?: StatisticsResultDto[];
-  minStatistics?: StatisticsResultDto[];
-  maxStatistics?: StatisticsResultDto[];
-  avgStatistics?: StatisticsResultDto[];
-  sumStatistics?: StatisticsResultDto[];
-}
-
-/**
- * Aggregation result item
- */
-export interface AggregationResultItemDto {
-  groupBy: FieldAggregationResultDto[];
-}
-
-/**
- * GraphQL response for systemQuery query with aggregation
- */
-export interface RuntimeQueryAggregationResponse {
-  data: {
-    runtime: {
-      runtimeQuery: {
-        items: Array<{
-          queryRtId: string;
-          aggregations: {
-            items: AggregationResultItemDto[];
-          };
-        }>;
-      };
-    };
-  };
 }
 
 /**
