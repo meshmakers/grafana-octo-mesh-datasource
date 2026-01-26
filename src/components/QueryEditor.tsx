@@ -4,7 +4,7 @@ import { QueryEditorProps } from '@grafana/data';
 import { ComboboxOption } from '@grafana/ui/dist/types/components/Combobox/types';
 import { DataSource } from '../datasource';
 import { OctoMeshDataSourceOptions, OctoMeshQuery, SystemQueryDto, QueryColumnDto, UserFieldFilter, CkTypeAttributeDto } from '../types';
-import { QueryType, getQueryType, supportsTimeFilter, getQueryTypeLabel } from '../queryTypes';
+import { QueryType, getQueryType, getQueryTypeLabel } from '../queryTypes';
 import { FilterRow } from './FilterRow';
 import { generateFilterId } from '../utils/filterConverter';
 
@@ -88,9 +88,6 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
 
   // Determine query type from cached queryCkTypeId
   const queryType = useMemo(() => getQueryType(query.queryCkTypeId), [query.queryCkTypeId]);
-
-  // Check if time filtering is supported for this query type
-  const showTimeFilter = supportsTimeFilter(queryType);
 
   // DateTime attributes for time filter dropdown (from source entity type)
   // Use sourceAttributes when available (for proper filtering on source entity attributes)
@@ -215,30 +212,20 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
             />
           </InlineField>
 
-          {/* Time filter - only shown for query types that support it */}
-          {showTimeFilter && (
-            <InlineField
-              label="Time Filter Column"
-              labelWidth={20}
-              tooltip="Apply Grafana time range to this DateTime attribute from source entity"
-            >
-              <Combobox
-                id="query-editor-time-filter"
-                options={timeFilterOptions}
-                value={query.timeFilterColumn ?? ''}
-                onChange={onTimeFilterColumnChange}
-                loading={attributesLoading || columnsLoading}
-                width={24}
-              />
-            </InlineField>
-          )}
-
-          {/* Info message for grouped aggregation queries */}
-          {!showTimeFilter && (
-            <div style={{ padding: '8px', color: '#888', fontSize: '12px' }}>
-              Time filtering is not available for grouped aggregation queries.
-            </div>
-          )}
+          <InlineField
+            label="Time Filter Column"
+            labelWidth={20}
+            tooltip="Apply Grafana time range to this DateTime attribute from source entity"
+          >
+            <Combobox
+              id="query-editor-time-filter"
+              options={timeFilterOptions}
+              value={query.timeFilterColumn ?? ''}
+              onChange={onTimeFilterColumnChange}
+              loading={attributesLoading || columnsLoading}
+              width={24}
+            />
+          </InlineField>
         </Stack>
       )}
 

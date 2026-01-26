@@ -25,7 +25,7 @@ import {
   CkTypeAttributeDto,
   CkTypeAttributesResponse,
 } from './types';
-import { QueryType, getQueryType, supportsTimeFilter } from './queryTypes';
+import { QueryType, getQueryType } from './queryTypes';
 import { buildQueryPayload } from './graphql/queryBuilder';
 import { convertUserFiltersToDto } from './utils/filterConverter';
 import { lastValueFrom } from 'rxjs';
@@ -58,7 +58,7 @@ export class DataSource extends DataSourceApi<OctoMeshQuery, OctoMeshDataSourceO
 
       // Build time range filters if timeFilterColumn is set and query type supports it
       const timeFilters: FieldFilterDto[] = [];
-      if (target.timeFilterColumn && range && supportsTimeFilter(queryType)) {
+      if (target.timeFilterColumn && range) {
         timeFilters.push({
           attributePath: target.timeFilterColumn,
           operator: 'GREATER_EQUAL_THAN',

@@ -59,16 +59,6 @@ export function getQueryType(ckTypeId: string | undefined): QueryType {
 }
 
 /**
- * Check if time filtering is supported for a query type
- *
- * Time filtering is supported for Simple and Aggregation queries,
- * but not for GroupedAggregation queries (which aggregate across all data)
- */
-export function supportsTimeFilter(queryType: QueryType): boolean {
-  return queryType !== QueryType.GroupedAggregation;
-}
-
-/**
  * Get a human-readable label for a query type
  */
 export function getQueryTypeLabel(queryType: QueryType): string {
