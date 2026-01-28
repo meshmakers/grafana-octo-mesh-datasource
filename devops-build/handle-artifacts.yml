@@ -5,7 +5,7 @@ steps:
       targetType: 'inline'
       script: |
         $source = "$(Build.SourcesDirectory)/dist/*"
-        $destination = "$(Build.ArtifactStagingDirectory)/$(pluginId)-$(BuildNumberLong).zip"
+        $destination = "$(Build.ArtifactStagingDirectory)/$(pluginId)-$(BuildNumberShort).zip"
         Compress-Archive -Path $source -DestinationPath $destination -Force
         Write-Host "Created archive: $destination"
 
@@ -15,7 +15,7 @@ steps:
       targetType: 'inline'
       script: |
         New-Item $(Build.ArtifactStagingDirectory)/versioninfo.txt -Force
-        Set-Content $(Build.ArtifactStagingDirectory)/versioninfo.txt $(BuildNumberLong)
+        Set-Content $(Build.ArtifactStagingDirectory)/versioninfo.txt $(BuildNumberShort)
 
   - task: PublishBuildArtifacts@1
     displayName: 'Publish Artifact: local'

@@ -17,7 +17,8 @@ steps:
       $minor = [int]$versionArray[1]
       $build = [int]$versionArray[2]
       $revision = [int]$versionArray[3]
-      $buildNumberShort = "$major.$minor.$build"
+      $branchSuffix = '$(Build.SourceBranchName)'.Replace('/', '-')
+      $buildNumberShort = "$major.$minor.$build$revision-$branchSuffix"
       $buildNumberLong = "$major.$minor.$build.$revision"
 
       if ($branch.StartsWith("refs/heads/test/")) {
@@ -29,7 +30,7 @@ steps:
         $versionArray = $versionString.Split(".")
         $major = [int]$versionArray[0]
         $minor = [int]$versionArray[1]
-        $buildNumberShort = "$major.$minor.$build"
+        $buildNumberShort = "$major.$minor.$build$revision-$newBranchName"
         $buildNumberLong = "$major.$minor.$build.$revision"
         $fullBuildNumber = "$major.$minor.$build.$revision-$newBranchName"
         Write-Host "Setting build number to $buildNumberLong"
