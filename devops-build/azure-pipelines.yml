@@ -109,7 +109,7 @@ stages:
             displayName: Restart Grafana deployment
             inputs:
               connectionType: 'Kubernetes Service Connection'
-              kubernetesServiceEndpoint: 'meshmakers_k3s-test-2'
+              kubernetesServiceEndpoint: 'meshmakers_test-2'
               namespace: 'grafana'
               command: 'rollout'
               arguments: 'restart deployment grafana'
