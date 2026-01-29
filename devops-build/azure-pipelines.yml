@@ -100,20 +100,16 @@ stages:
     condition: and(succeeded(), eq(variables.isMain, true))
     dependsOn: Package
     jobs:
-      - deployment: DeployTest2
+      - job: DeployTest2
         displayName: Rollout restart Grafana on test-2
         pool:
           name: meshmakers-ci-agents
-        environment: test-2-grafana
-        strategy:
-          runOnce:
-            deploy:
-              steps:
-                - task: Kubernetes@1
-                  displayName: Restart Grafana deployment
-                  inputs:
-                    connectionType: 'Kubernetes Service Connection'
-                    kubernetesServiceEndpoint: 'meshmakers_k3s-test-2'
-                    namespace: 'grafana'
-                    command: 'rollout'
-                    arguments: 'restart deployment grafana'
+        steps:
+          - task: Kubernetes@1
+            displayName: Restart Grafana deployment
+            inputs:
+              connectionType: 'Kubernetes Service Connection'
+              kubernetesServiceEndpoint: 'meshmakers_k3s-test-2'
+              namespace: 'grafana'
+              command: 'rollout'
+              arguments: 'restart deployment grafana'
