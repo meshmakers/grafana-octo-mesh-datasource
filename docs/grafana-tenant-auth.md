@@ -81,27 +81,13 @@ Das Plugin wird zu einem Backend-Plugin (Go) umgebaut. Der User loggt sich weite
 
 **Aufwand:** Groß (Extension Grant Handler + Go-Backend-Plugin + Tests), aber die bestehende Infrastruktur reduziert den Server-seitigen Aufwand deutlich.
 
-## Option 4: `allowed_tenants` Middleware-Relaxierung
+## ~~Option 4: `allowed_tenants` Middleware-Relaxierung~~ (Verworfen)
 
-Die `TenantAuthorizationMiddleware` in OctoMesh wird angepasst, sodass neben `tenant_id` auch der `allowed_tenants` Claim geprüft wird. Ein Token vom System-Tenant kann dann für alle Tenants verwendet werden, für die der User berechtigt ist.
+> **Verworfen:** Bei diesem Ansatz stammen Scopes und Rollen aus dem System-Tenant, nicht aus dem Ziel-Tenant. Da Scopes (`full_access` vs. `readonly`) und Rollen pro Tenant unterschiedlich konfiguriert sein können, würde dies zu falschen Berechtigungen führen — ein User könnte z.B. Schreibzugriff auf einen Tenant erhalten, für den er nur Lesezugriff haben sollte.
 
-**Umsetzung:**
-- Einzeilige Änderung in `TenantAuthorizationMiddleware`: Zusätzlich zum `tenant_id`-Check wird geprüft, ob der Route-Tenant in `allowed_tenants` enthalten ist
-- Plugin bleibt Frontend-only (kein Go-Backend nötig)
-- Eine Datasource pro Tenant, `oauthPassThru` leitet den bestehenden Token weiter
+~~Die `TenantAuthorizationMiddleware` in OctoMesh wird angepasst, sodass neben `tenant_id` auch der `allowed_tenants` Claim geprüft wird. Ein Token vom System-Tenant kann dann für alle Tenants verwendet werden, für die der User berechtigt ist.~~
 
-**Vorteile:**
-- Minimaler Aufwand (eine Middleware-Änderung)
-- User-Identität bleibt erhalten
-- Kein Plugin-Umbau nötig
-
-**Nachteile:**
-- **Scopes stammen aus dem System-Tenant** — wenn der OAuth-Client im Ziel-Tenant andere Scopes haben sollte als im System-Tenant, greifen die falschen Berechtigungen (z.B. `full_access` statt `readonly`)
-- **Rollen stammen aus dem System-Tenant** — aktuell nicht relevant für die API, aber bei zukünftiger Erweiterung der Autorisierung ein Problem
-- Leicht gelockerte Sicherheit: Ein gestohlener Token ermöglicht Zugriff auf alle `allowed_tenants`, nicht nur den Login-Tenant
-- Nicht zukunftssicher wenn die API-Autorisierung erweitert wird
-
-**Aufwand:** Klein.
+~~**Aufwand:** Klein.~~
 
 ## Zusammenfassung
 
@@ -110,6 +96,6 @@ Die `TenantAuthorizationMiddleware` in OctoMesh wird angepasst, sodass neben `te
 | **1. Separate Instanzen** | N | Keiner | Keiner | Ja | Ja | Ops |
 | **2. Client Credentials** | 1 | Go-Backend | Keiner | **Nein** | Ja | Mittel |
 | **3. Token Exchange** | 1 | Go-Backend | Extension Grant | Ja | Ja | Groß |
-| **4. allowed_tenants** | 1 | Minimal | 1 Middleware | Ja | **Nein*** | Klein |
+| ~~**4. allowed_tenants**~~ | ~~1~~ | ~~Minimal~~ | ~~1 Middleware~~ | ~~Ja~~ | ~~**Nein**~~ | ~~Klein~~ |
 
-*\*Scopes und Rollen stammen aus dem System-Tenant, nicht dem Ziel-Tenant.*
+*~~Option 4 verworfen:~~ Scopes und Rollen stammen aus dem System-Tenant, nicht dem Ziel-Tenant — führt zu falschen Berechtigungen.*
