@@ -1,109 +1,130 @@
-# Grafana OctoMesh Datasource: Tenant-spezifische Authentifizierung
+# Grafana OctoMesh Datasource: Tenant-Specific Authentication
 
-## Problemstellung
+## Problem Statement
 
-Die Grafana OctoMesh Datasource wurde entwickelt, bevor OctoMesh tenant-spezifische Authentifizierung eingeführt hat. Heute enthält jeder OAuth-Token einen `tenant_id` Claim, der den Tenant identifiziert, über den der User sich eingeloggt hat. Die `TenantAuthorizationMiddleware` in OctoMesh erzwingt, dass dieser `tenant_id` mit dem Tenant in der API-Route übereinstimmt — andernfalls wird die Anfrage mit **403 Forbidden** abgelehnt.
+The Grafana OctoMesh Datasource needs to query tenant-specific APIs. OctoMesh's `TenantAuthorizationMiddleware` enforces that the token's `tenant_id` claim matches the API route's tenant -- requests with a mismatched `tenant_id` receive **403 Forbidden**.
 
-Die Grafana Datasource authentifiziert sich über Grafana's Generic OAuth-Mechanismus (`oauthPassThru`). Da Grafana nur **eine einzige globale OAuth-Konfiguration** unterstützt, wird der Token immer gegen den System-Tenant ausgestellt (`tenant_id: OctoSystem`). Sobald die Datasource Daten eines anderen Tenants abfragt (z.B. `/tenants/TenantA/graphql`), schlägt die Tenant-Autorisierung fehl.
+Users exist only in their respective tenant (e.g., `meshtest`, `sbeg`), not in the System-Tenant. Each Grafana Organization maps to one OctoMesh Tenant and has a datasource configured with that tenant's ID.
 
-Zusätzlich relevant: Die API-Scopes (`octo_api_full_access`, `octo_api_readonly`) werden ausgewertet und bestimmen, ob ein Client lesend oder schreibend zugreifen kann. Diese Scopes stammen aus der OAuth-Client-Konfiguration des Login-Tenants und könnten sich von der Client-Konfiguration des Ziel-Tenants unterscheiden.
+## Solution: Tenant-Specific OAuth via `acr_values`
 
-## Warum Grafana Organisationen nicht ausreichen
+The OctoMesh Identity Server supports the `acr_values=tenant:{tenantId}` parameter on `/connect/authorize`. This directs the user to the correct tenant's login page, authenticates them there, and issues a token with the correct `tenant_id`, roles, and scopes.
 
-Ein naheliegender Ansatz wäre, pro OctoMesh-Tenant eine Grafana Organisation anzulegen, jeweils mit eigener OAuth-Konfiguration gegen den jeweiligen Tenant. Grafana unterstützt jedoch **nicht mehrere Konfigurationen desselben Auth-Provider-Typs**:
+**No Identity Server changes are required.** The existing `acr_values` mechanism solves the problem. The work is on the Grafana plugin side.
 
-> *"It is not possible to configure the same type of authentication provider twice. For example, you can have SAML and Generic OAuth configured, but you cannot have two different Generic OAuth configurations."*
-> — [Grafana Dokumentation](https://grafana.com/docs/grafana/latest/setup-grafana/configure-access/configure-authentication/)
+### Authentication Flow
 
-Da OctoMesh als Identity Provider über Generic OAuth angebunden wird, kann es pro Grafana-Instanz nur eine einzige OctoMesh-OAuth-Konfiguration geben — unabhängig von der Anzahl der Grafana Organisations.
+```
+Grafana Org "meshtest"     Identity Server              Tenant "meshtest"
+  |                             |                            |
+  | Datasource config:          |                            |
+  | tenantId = meshtest         |                            |
+  |                             |                            |
+  |-- /connect/authorize ------>|                            |
+  |   acr_values=tenant:meshtest|                            |
+  |                             |-- Redirect to meshtest --->|
+  |                             |   login page               |
+  |                             |                            |
+  |                             |<-- User authenticated -----|
+  |                             |                            |
+  |<-- Token -------------------|                            |
+  |   tenant_id = meshtest      |                            |
+  |   roles from meshtest       |                            |
+  |                             |                            |
+  |-- API call with token ----->|                            |
+  |   /tenants/meshtest/GraphQL |                            |
+  |   (tenant_id matches!)      |                            |
+```
 
-## Voraussetzung: Grafana-Login über den System-Tenant
+### Issued Token
 
-Bei einer einzelnen Grafana-Instanz mit OctoMesh-SSO loggen sich alle User über die eine globale OAuth-Konfiguration ein — und diese zeigt auf den **System-Tenant**. Das hat Konsequenzen für Option 2 und 3:
+The issued access token contains:
 
-- **Token Exchange (Option 3):** Der User muss im System-Tenant authentifizierbar sein (direkt angelegt oder über Cross-Tenant Auth via `RtOctoTenantIdentityProvider` erreichbar). Nur dann kann ein initialer Token erlangt werden, der anschließend gegen einen tenant-spezifischen Token getauscht wird.
-- **Client Credentials (Option 2):** Der API-Zugriff ist vom Grafana-Login entkoppelt — die Datasource authentifiziert sich eigenständig gegen den Ziel-Tenant. Für den Grafana-Login selbst gilt aber dieselbe Einschränkung: Wenn SSO über OctoMesh gewünscht ist, muss der User über den System-Tenant erreichbar sein. Alternativ können lokale Grafana-Accounts verwendet werden.
-- **Separate Instanzen (Option 1):** Hier besteht diese Einschränkung nicht — jede Instanz kann direkt gegen den jeweiligen Tenant authentifizieren.
+- `tenant_id`: Matches the tenant from `acr_values` (e.g., `meshtest`)
+- `role`: Roles assigned to the user in that tenant
+- `allowed_tenants`: All tenants the user may access
+- `sub`: The user's identity within the tenant
 
-## Option 1: Separate Grafana-Instanz pro Tenant
+The token passes `TenantAuthorizationMiddleware` because `tenant_id` matches the API route.
 
-Jeder OctoMesh-Tenant erhält eine eigene Grafana-Instanz mit eigener OAuth-Konfiguration.
+## Plugin Changes Required
 
-**Umsetzung:**
-- OAuth-Config jeder Instanz zeigt auf den jeweiligen Tenant (`/{tenantId}/login`, `acr_values=tenant:{tenantId}`)
-- Token hat korrekten `tenant_id` und korrekte Scopes
-- Plugin-Code bleibt unverändert
+### 1. Datasource Configuration
 
-**Vorteile:**
-- Keine Code-Änderungen an Plugin oder Server
-- Saubere Isolation (Dashboards, User, Berechtigungen)
-- Korrekte Scopes und Rollen pro Tenant
+Add a `tenantId` field to the datasource configuration UI. Each datasource instance stores the target OctoMesh tenant ID.
 
-**Nachteile:**
-- Operativer Overhead: N Instanzen provisionieren, updaten, monitoren
-- Kein zentrales Dashboard über Tenants hinweg möglich
-- Widerspricht dem Ziel einer einzelnen Grafana-Instanz
+### 2. OAuth Authorize Request
 
-**Aufwand:** Kein Entwicklungsaufwand, aber laufender Betriebsaufwand.
+The plugin must include `acr_values=tenant:{tenantId}` in the OAuth authorize URL, where `{tenantId}` comes from the datasource configuration. This requires a Go backend component that controls the OAuth flow.
 
-## Option 2: Client Credentials pro Datasource (Service Account)
+### 3. Go Backend Component
 
-Das Plugin wird zu einem Backend-Plugin (Go) umgebaut. Jede Datasource-Instanz speichert eigene OAuth-Client-Credentials (`client_id` + `client_secret`) und authentifiziert sich per Client Credentials Grant direkt gegen den konfigurierten Tenant.
+The datasource plugin needs a Go backend to handle tenant-specific OAuth:
 
-**Umsetzung:**
-- Admin legt pro Tenant eine Datasource an und trägt Client-Credentials ein
-- Plugin-Backend holt sich eigenständig einen Token für den Tenant
-- Kein `oauthPassThru` mehr — Token wird vom Plugin selbst verwaltet
+- Read `tenantId` from the datasource configuration
+- Append `acr_values=tenant:{tenantId}` to the authorize URL
+- Handle the authorization code exchange
+- Cache and refresh tokens per tenant
 
-**Vorteile:**
-- Keine Server-Änderung an OctoMesh nötig
-- Token hat korrekten `tenant_id` und korrekte Scopes
-- Unabhängig vom eingeloggten Grafana-User
+## Organization Switching and SSO Behavior
 
-**Nachteile:**
-- **User-Identität geht verloren** — alle Queries laufen unter dem Service Account; Audit-Trail zeigt nicht den tatsächlichen User
-- Plugin muss als Go-Backend-Plugin neu implementiert werden (erheblicher Umbau)
-- Client-Secrets müssen pro Datasource verwaltet und rotiert werden
+When a user switches between Grafana Organizations (each mapped to a different OctoMesh tenant), the plugin backend must obtain a token for the new tenant. The user experience depends on whether the user has previously authenticated with that tenant.
 
-**Aufwand:** Mittel bis groß (Go-Backend-Plugin, Token-Management, Secrets-Verwaltung).
+### Per-Tenant Cookie Scoping
 
-## Option 3: Token Exchange (RFC 8693)
+The Identity Server stores a separate authentication cookie per tenant via `TenantCookieManager`:
 
-Das Plugin wird zu einem Backend-Plugin (Go) umgebaut. Der User loggt sich weiterhin via OAuth ein (System-Tenant). Das Plugin-Backend tauscht den User-Token serverseitig gegen einen tenant-spezifischen Token aus. Dafür wird ein Token Exchange Endpoint im OctoMesh Identity Server benötigt.
+```
+.AspNetCore.Identity.Application.meshtest   ← session for meshtest
+.AspNetCore.Identity.Application.sbeg       ← session for sbeg
+```
 
-**Umsetzung:**
-- Identity Server: Neuer Extension Grant Handler für `urn:ietf:params:oauth:grant-type:token-exchange`
-- Der Handler validiert den Original-Token, prüft `allowed_tenants`, löst Rollen und Scopes für den Ziel-Tenant auf, und stellt einen neuen Token aus
-- Plugin-Backend: Nimmt den User-Token, ruft Token Exchange auf, cached den Ergebnis-Token, leitet Requests weiter
+These cookies are independent -- authenticating in one tenant does not affect sessions in other tenants.
 
-**Vorteile:**
-- **User-Identität bleibt erhalten** — jede Query ist dem eingeloggten User zugeordnet
-- Token hat korrekten `tenant_id`, korrekte Rollen und korrekte Scopes
-- Sauberste Lösung aus Sicherheitsperspektive
-- Zukunftssicher auch wenn API-Autorisierung erweitert wird
+### User Experience When Switching Organizations
 
-**Nachteile:**
-- Aufwand auf beiden Seiten (Identity Server + Go-Backend-Plugin)
-- Duende IdentityServer 7.4.7 unterstützt Extension Grants nativ, aber der Handler muss implementiert werden (~200-300 Zeilen C#)
-- ~70-80% der benötigten Server-Infrastruktur existiert bereits (Tenant-Resolution, AllowedTenantsResolver, UserProfileService)
+| Scenario | What Happens |
+|----------|-------------|
+| First visit to tenant `meshtest` | Full login (username/password, LDAP, external IdP -- whatever the tenant has configured) |
+| Switch to tenant `sbeg` (first time) | Full login for `sbeg` |
+| Switch back to `meshtest` | SSO -- cookie exists, token issued silently (no login screen) |
+| Switch back to `sbeg` | SSO -- cookie exists, token issued silently |
+| Cookie expired for `meshtest` | Full login again |
 
-**Aufwand:** Groß (Extension Grant Handler + Go-Backend-Plugin + Tests), aber die bestehende Infrastruktur reduziert den Server-seitigen Aufwand deutlich.
+After the initial login per tenant, subsequent organization switches are seamless via SSO.
 
-## ~~Option 4: `allowed_tenants` Middleware-Relaxierung~~ (Verworfen)
+### Plugin Token Management
 
-> **Verworfen:** Bei diesem Ansatz stammen Scopes und Rollen aus dem System-Tenant, nicht aus dem Ziel-Tenant. Da Scopes (`full_access` vs. `readonly`) und Rollen pro Tenant unterschiedlich konfiguriert sein können, würde dies zu falschen Berechtigungen führen — ein User könnte z.B. Schreibzugriff auf einen Tenant erhalten, für den er nur Lesezugriff haben sollte.
+This approach replaces Grafana's standard `oauthPassThru` mechanism (which forwards a single global OAuth token). The Go backend must manage tokens independently:
 
-~~Die `TenantAuthorizationMiddleware` in OctoMesh wird angepasst, sodass neben `tenant_id` auch der `allowed_tenants` Claim geprüft wird. Ein Token vom System-Tenant kann dann für alle Tenants verwendet werden, für die der User berechtigt ist.~~
+- **Per-user, per-tenant token cache**: Store access tokens keyed by `(grafana_user_id, tenant_id)`
+- **On datasource request**: Check if a valid (non-expired) token exists for the user and tenant
+  - **Token exists**: Use it for the API call
+  - **No token / expired**: Initiate an OAuth authorize flow with `acr_values=tenant:{tenantId}` and redirect the user
+- **Refresh tokens**: When `offline_access` scope is included and the token expires, use the refresh token to obtain a new access token without user interaction
+- **Token lifetime**: Access tokens are valid for 3600 seconds (default). With refresh tokens, the user only re-authenticates when the refresh token expires or the Identity Server session cookie expires.
 
-~~**Aufwand:** Klein.~~
+## Evaluated and Rejected Alternatives
 
-## Zusammenfassung
+| Approach | Why Rejected |
+|----------|-------------|
+| **RFC 8693 Token Exchange** | Unnecessary complexity. Users don't exist in the System-Tenant, so there's no source token to exchange. The `acr_values` approach is simpler and direct. |
+| **Separate Grafana instances** | Operational overhead (N instances to maintain). One instance with multiple organizations is preferred. |
+| **Client Credentials per Datasource** | Loses user identity. Audit trails show only the service account, not the actual user. |
+| **Middleware Relaxation** | Security risk. Scopes and roles from the wrong tenant would be used. |
 
-| | Instanzen | Plugin-Umbau | Server-Umbau | User-Identität | Korrekte Scopes | Aufwand |
-|---|---|---|---|---|---|---|
-| **1. Separate Instanzen** | N | Keiner | Keiner | Ja | Ja | Ops |
-| **2. Client Credentials** | 1 | Go-Backend | Keiner | **Nein** | Ja | Mittel |
-| **3. Token Exchange** | 1 | Go-Backend | Extension Grant | Ja | Ja | Groß |
-| ~~**4. allowed_tenants**~~ | ~~1~~ | ~~Minimal~~ | ~~1 Middleware~~ | ~~Ja~~ | ~~**Nein**~~ | ~~Klein~~ |
+## Identity Server Reference
 
-*~~Option 4 verworfen:~~ Scopes und Rollen stammen aus dem System-Tenant, nicht dem Ziel-Tenant — führt zu falschen Berechtigungen.*
+The Identity Server's tenant-specific OAuth capability is documented in the identity server repository:
+
+- `docs/CONCEPT-TENANT-SPECIFIC-OAUTH.md` -- Full documentation of the `acr_values` mechanism
+- `docs/authentication.md` -- Tenant resolution and token endpoint architecture
+
+Key Identity Server components involved:
+
+| Component | Role |
+|-----------|------|
+| `OidcTenantResolutionMiddleware` | Parses `acr_values=tenant:{tenantId}` from authorize requests |
+| `TenantLoginRedirectMiddleware` | Redirects to the tenant-specific login page |
+| `UserProfileService` | Adds `tenant_id` and `allowed_tenants` claims to tokens |
+| `TenantCookieManager` | Per-tenant cookie scoping for concurrent multi-tenant sessions |
