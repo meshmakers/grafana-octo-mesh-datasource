@@ -17,6 +17,14 @@ Ein naheliegender Ansatz wäre, pro OctoMesh-Tenant eine Grafana Organisation an
 
 Da OctoMesh als Identity Provider über Generic OAuth angebunden wird, kann es pro Grafana-Instanz nur eine einzige OctoMesh-OAuth-Konfiguration geben — unabhängig von der Anzahl der Grafana Organisations.
 
+## Voraussetzung: Grafana-Login über den System-Tenant
+
+Bei einer einzelnen Grafana-Instanz mit OctoMesh-SSO loggen sich alle User über die eine globale OAuth-Konfiguration ein — und diese zeigt auf den **System-Tenant**. Das hat Konsequenzen für Option 2 und 3:
+
+- **Token Exchange (Option 3):** Der User muss im System-Tenant authentifizierbar sein (direkt angelegt oder über Cross-Tenant Auth via `RtOctoTenantIdentityProvider` erreichbar). Nur dann kann ein initialer Token erlangt werden, der anschließend gegen einen tenant-spezifischen Token getauscht wird.
+- **Client Credentials (Option 2):** Der API-Zugriff ist vom Grafana-Login entkoppelt — die Datasource authentifiziert sich eigenständig gegen den Ziel-Tenant. Für den Grafana-Login selbst gilt aber dieselbe Einschränkung: Wenn SSO über OctoMesh gewünscht ist, muss der User über den System-Tenant erreichbar sein. Alternativ können lokale Grafana-Accounts verwendet werden.
+- **Separate Instanzen (Option 1):** Hier besteht diese Einschränkung nicht — jede Instanz kann direkt gegen den jeweiligen Tenant authentifizieren.
+
 ## Option 1: Separate Grafana-Instanz pro Tenant
 
 Jeder OctoMesh-Tenant erhält eine eigene Grafana-Instanz mit eigener OAuth-Konfiguration.
