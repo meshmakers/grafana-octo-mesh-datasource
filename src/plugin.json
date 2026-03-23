@@ -3,7 +3,10 @@
   "type": "datasource",
   "name": "OctoMesh",
   "id": "grafana-octo-mesh-datasource",
+  "backend": true,
+  "executable": "gpx_grafana-octo-mesh-datasource",
   "metrics": true,
+  "alerting": false,
   "info": {
     "description": "",
     "author": {
@@ -22,27 +25,5 @@
   "dependencies": {
     "grafanaDependency": ">=10.4.0",
     "plugins": []
-  },
-  "routes": [
-    {
-      "path": "system",
-      "url": "{{ .URL }}/system",
-      "headers": [
-        {
-          "name": "Content-Type",
-          "content": "application/json"
-        }
-      ]
-    },
-    {
-      "path": "tenants",
-      "url": "{{ .URL }}/tenants",
-      "headers": [
-        {
-          "name": "Content-Type",
-          "content": "application/json"
-        }
-      ]
-    }
-  ]
+  }
 }

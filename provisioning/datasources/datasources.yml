@@ -10,5 +10,8 @@ datasources:
     version: 1
     editable: true
     jsonData:
-      oauthPassThru: true
+      tenantId: 'meshtest'
+      identityServerUrl: 'https://host.docker.internal:5003'
+      oauthClientId: 'grafana-datasource'
+      oauthScopes: 'openid profile email assetTenantAPI.full_access offline_access'
       tlsSkipVerify: true

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import { Badge, Button, Combobox, FieldSet, InlineField, Input, Stack } from '@grafana/ui';
+import { Alert, Badge, Button, Combobox, FieldSet, InlineField, Input, Stack } from '@grafana/ui';
 import { QueryEditorProps } from '@grafana/data';
 import { ComboboxOption } from '@grafana/ui/dist/types/components/Combobox/types';
 import { DataSource } from '../datasource';
@@ -32,8 +32,32 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
   const [columnsLoading, setColumnsLoading] = useState(false);
   const [attributesLoading, setAttributesLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [authStatus, setAuthStatus] = useState<{ checked: boolean; authenticated: boolean }>({
+    checked: false,
+    authenticated: false,
+  });
+  const [authInProgress, setAuthInProgress] = useState(false);
 
-  // Load SystemQueries on mount
+  // Check auth status on mount
+  useEffect(() => {
+    datasource.checkAuthStatus().then((status) => {
+      setAuthStatus({ checked: true, authenticated: status.authenticated });
+    });
+  }, [datasource]);
+
+  const onAuthenticate = useCallback(async () => {
+    setAuthInProgress(true);
+    try {
+      const success = await datasource.initiateAuth();
+      setAuthStatus({ checked: true, authenticated: success });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Authentication failed');
+    } finally {
+      setAuthInProgress(false);
+    }
+  }, [datasource]);
+
+  // Load SystemQueries on mount (only when authenticated or auth not yet checked)
   useEffect(() => {
     const loadQueries = async () => {
       if (!datasource.tenantId) {
@@ -169,6 +193,23 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
 
   return (
     <Stack direction="column" gap={1}>
+      {/* Auth status banner */}
+      {authStatus.checked && !authStatus.authenticated && (
+        <Alert title="Authentication required" severity="warning">
+          <Stack direction="row" gap={2} alignItems="center">
+            <span>You need to authenticate with tenant &quot;{datasource.tenantId}&quot; to query data.</span>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={onAuthenticate}
+              disabled={authInProgress}
+            >
+              {authInProgress ? 'Authenticating...' : 'Authenticate'}
+            </Button>
+          </Stack>
+        </Alert>
+      )}
+
       {/* SystemQuery selector */}
       <Stack direction="row" gap={2} alignItems="center">
         <InlineField

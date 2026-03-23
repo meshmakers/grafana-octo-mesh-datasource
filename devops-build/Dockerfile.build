@@ -1,10 +1,39 @@
 # Multi-stage Dockerfile for building Grafana datasource plugin
-# This ensures reproducible builds with no host dependencies
-
-# Build stage
-FROM node:22-alpine AS build
+# Builds both the Go backend and TypeScript frontend
 
 ARG VERSION=1.0.0
+
+# ─── Go backend build stage ─────────────────────────────────────────
+FROM golang:1.25-alpine AS go-build
+
+WORKDIR /app
+
+# Copy Go module files first for better caching
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy Go source files
+COPY pkg/ pkg/
+COPY Magefile.go ./
+
+# Run Go tests
+RUN go test ./pkg/... -count=1
+
+# Run Go vet
+RUN go vet ./pkg/...
+
+# Build backend binary for linux/amd64
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+    go build -o dist/gpx_grafana-octo-mesh-datasource_linux_amd64 ./pkg
+
+# Also build for linux/arm64
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=arm64 \
+    go build -o dist/gpx_grafana-octo-mesh-datasource_linux_arm64 ./pkg
+
+# ─── TypeScript frontend build stage ────────────────────────────────
+FROM node:22-alpine AS node-build
+
+ARG VERSION
 
 WORKDIR /app
 
@@ -32,7 +61,8 @@ RUN npm run build
 # Inject VERSION into plugin.json (replaces the webpack-generated version)
 RUN sed -i "s/\"version\": \"[^\"]*\"/\"version\": \"${VERSION}\"/" /app/dist/plugin.json
 
-# Output stage - copy only the built plugin
+# ─── Output stage - combine frontend and backend ────────────────────
 FROM scratch AS output
 
-COPY --from=build /app/dist /dist
+COPY --from=node-build /app/dist /dist
+COPY --from=go-build /app/dist/gpx_* /dist/

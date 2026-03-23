@@ -28,20 +28,11 @@ export function ConfigEditor(props: Props) {
   }, [options.version, options.url]);
 
   const onUrlChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const newUrl = event.target.value;
     onOptionsChange({
       ...options,
-      // Set root-level url for Grafana proxy routing
-      url: newUrl,
+      url: event.target.value,
       jsonData: {
         ...jsonData,
-        // Reset tenant when URL changes?
-        // Maybe better to keep it so user doesn't have to re-type if they just fixed a typo in URL
-        // tenantId: undefined, 
-
-        // Forward user's OAuth token to OctoMesh
-        oauthPassThru: true,
-        // Preserve existing tlsSkipVerify setting (default: false for security)
         tlsSkipVerify: jsonData.tlsSkipVerify ?? false,
       },
     });
@@ -53,6 +44,36 @@ export function ConfigEditor(props: Props) {
       jsonData: {
         ...jsonData,
         tenantId: event.target.value,
+      },
+    });
+  };
+
+  const onIdentityServerUrlChange = (event: ChangeEvent<HTMLInputElement>) => {
+    onOptionsChange({
+      ...options,
+      jsonData: {
+        ...jsonData,
+        identityServerUrl: event.target.value,
+      },
+    });
+  };
+
+  const onOAuthClientIdChange = (event: ChangeEvent<HTMLInputElement>) => {
+    onOptionsChange({
+      ...options,
+      jsonData: {
+        ...jsonData,
+        oauthClientId: event.target.value,
+      },
+    });
+  };
+
+  const onOAuthScopesChange = (event: ChangeEvent<HTMLInputElement>) => {
+    onOptionsChange({
+      ...options,
+      jsonData: {
+        ...jsonData,
+        oauthScopes: event.target.value,
       },
     });
   };
@@ -104,8 +125,52 @@ export function ConfigEditor(props: Props) {
             id="config-editor-tenant"
             value={jsonData.tenantId ?? ''}
             onChange={onTenantIdChange}
-            placeholder="e.g. tenant-123"
+            placeholder="e.g. meshtest"
             width={40}
+          />
+        </InlineField>
+      </FieldSet>
+
+      <FieldSet label="Authentication">
+        <InlineField
+          label="Identity Server URL"
+          labelWidth={20}
+          tooltip="URL of the OctoMesh Identity Server (e.g., https://connect.example.com)"
+        >
+          <Input
+            id="config-editor-identity-server-url"
+            value={jsonData.identityServerUrl ?? ''}
+            onChange={onIdentityServerUrlChange}
+            placeholder="https://connect.example.com"
+            width={60}
+          />
+        </InlineField>
+
+        <InlineField
+          label="Client ID"
+          labelWidth={20}
+          tooltip="OAuth client ID for tenant-specific authentication"
+        >
+          <Input
+            id="config-editor-oauth-client-id"
+            value={jsonData.oauthClientId ?? ''}
+            onChange={onOAuthClientIdChange}
+            placeholder="e.g. grafana-datasource"
+            width={40}
+          />
+        </InlineField>
+
+        <InlineField
+          label="Scopes"
+          labelWidth={20}
+          tooltip="OAuth scopes (space-separated)"
+        >
+          <Input
+            id="config-editor-oauth-scopes"
+            value={jsonData.oauthScopes ?? 'openid profile email assetTenantAPI.full_access offline_access'}
+            onChange={onOAuthScopesChange}
+            placeholder="openid profile email assetTenantAPI.full_access offline_access"
+            width={60}
           />
         </InlineField>
       </FieldSet>

@@ -80,7 +80,7 @@ describe('DataSource', () => {
             expect(fetchMock).toHaveBeenCalledTimes(1);
             const callArg = fetchMock.mock.calls[0][0];
 
-            expect(callArg.url).toBe('http://localhost:3000/tenants/test-tenant/graphql');
+            expect(callArg.url).toBe('http://localhost:3000/graphql');
             expect(callArg.data.variables.fieldFilter).toBeDefined();
             expect(callArg.data.variables.fieldFilter).toHaveLength(2);
 
@@ -204,7 +204,7 @@ describe('DataSource', () => {
             expect(fetchMock).toHaveBeenCalledTimes(1);
             const callArg = fetchMock.mock.calls[0][0];
 
-            expect(callArg.url).toBe('http://localhost:3000/tenants/test-tenant/graphql');
+            expect(callArg.url).toBe('http://localhost:3000/graphql');
             expect(callArg.data.variables.rtCkId).toBe('Industry.Basic/Alarm');
             expect(result).toHaveLength(3);
             expect(result[0]).toEqual({ attributePath: 'name', attributeValueType: 'String' });
