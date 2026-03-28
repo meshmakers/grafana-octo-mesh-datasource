@@ -88,27 +88,39 @@ export function ConfigEditor(props: Props) {
     });
   };
 
-  const onServiceAccountTokenChange = (value: string) => {
+  const onGrafanaAdminUserChange = (value: string) => {
     onOptionsChange({
       ...options,
       secureJsonData: {
         ...options.secureJsonData,
-        grafanaServiceAccountToken: value,
+        grafanaAdminUser: value,
       },
     });
   };
 
-  const onServiceAccountTokenReset = () => {
+  const onGrafanaAdminUserReset = () => {
     onOptionsChange({
       ...options,
-      secureJsonFields: {
-        ...options.secureJsonFields,
-        grafanaServiceAccountToken: false,
-      },
+      secureJsonFields: { ...options.secureJsonFields, grafanaAdminUser: false },
+      secureJsonData: { ...options.secureJsonData, grafanaAdminUser: '' },
+    });
+  };
+
+  const onGrafanaAdminPasswordChange = (value: string) => {
+    onOptionsChange({
+      ...options,
       secureJsonData: {
         ...options.secureJsonData,
-        grafanaServiceAccountToken: '',
+        grafanaAdminPassword: value,
       },
+    });
+  };
+
+  const onGrafanaAdminPasswordReset = () => {
+    onOptionsChange({
+      ...options,
+      secureJsonFields: { ...options.secureJsonFields, grafanaAdminPassword: false },
+      secureJsonData: { ...options.secureJsonData, grafanaAdminPassword: '' },
     });
   };
 
@@ -198,19 +210,38 @@ export function ConfigEditor(props: Props) {
           />
         </InlineField>
 
+      </FieldSet>
+
+      <FieldSet label="Organization Management (optional)">
         <InlineField
-          label="Service Account Token"
+          label="Grafana Admin User"
           labelWidth={20}
-          tooltip="Grafana Service Account token with Admin role. Used to auto-create organizations per tenant."
+          tooltip="Grafana Server Admin username. Required for auto-creating organizations per tenant."
         >
           <SecretInput
-            id="config-editor-sa-token"
-            isConfigured={!!options.secureJsonFields?.grafanaServiceAccountToken}
-            value={options.secureJsonData?.grafanaServiceAccountToken ?? ''}
-            onChange={(e) => onServiceAccountTokenChange(e.currentTarget.value)}
-            onReset={onServiceAccountTokenReset}
-            placeholder="glsa_..."
-            width={60}
+            id="config-editor-grafana-admin-user"
+            isConfigured={!!options.secureJsonFields?.grafanaAdminUser}
+            value={options.secureJsonData?.grafanaAdminUser ?? ''}
+            onChange={(e) => onGrafanaAdminUserChange(e.currentTarget.value)}
+            onReset={onGrafanaAdminUserReset}
+            placeholder="admin"
+            width={40}
+          />
+        </InlineField>
+
+        <InlineField
+          label="Grafana Admin Password"
+          labelWidth={20}
+          tooltip="Grafana Server Admin password."
+        >
+          <SecretInput
+            id="config-editor-grafana-admin-password"
+            isConfigured={!!options.secureJsonFields?.grafanaAdminPassword}
+            value={options.secureJsonData?.grafanaAdminPassword ?? ''}
+            onChange={(e) => onGrafanaAdminPasswordChange(e.currentTarget.value)}
+            onReset={onGrafanaAdminPasswordReset}
+            placeholder="password"
+            width={40}
           />
         </InlineField>
       </FieldSet>

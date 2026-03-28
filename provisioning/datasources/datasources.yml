@@ -16,4 +16,5 @@ datasources:
       oauthScopes: 'openid profile email octo_api offline_access'
       tlsSkipVerify: true
     secureJsonData:
-      grafanaServiceAccountToken: '${GRAFANA_SA_TOKEN}'
+      grafanaAdminUser: 'admin'
+      grafanaAdminPassword: 'admin'

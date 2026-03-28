@@ -28,13 +28,15 @@ type Datasource struct {
 }
 
 type Settings struct {
-	TenantID                   string `json:"tenantId"`
-	IdentityServerURL          string `json:"identityServerUrl"`
-	OAuthClientID              string `json:"oauthClientId"`
-	OAuthScopes                string `json:"oauthScopes"`
-	TLSSkipVerify              bool   `json:"tlsSkipVerify"`
-	GrafanaServiceAccountToken string `json:"-"` // From secureJsonData
-	URL                        string `json:"-"`
+	TenantID          string `json:"tenantId"`
+	IdentityServerURL string `json:"identityServerUrl"`
+	OAuthClientID     string `json:"oauthClientId"`
+	OAuthScopes       string `json:"oauthScopes"`
+	TLSSkipVerify     bool   `json:"tlsSkipVerify"`
+	// Grafana admin credentials for org management (Server Admin API requires Basic Auth)
+	GrafanaAdminUser     string `json:"-"` // From secureJsonData
+	GrafanaAdminPassword string `json:"-"` // From secureJsonData
+	URL                  string `json:"-"`
 }
 
 func parseSettings(s backend.DataSourceInstanceSettings) (*Settings, error) {
@@ -43,9 +45,12 @@ func parseSettings(s backend.DataSourceInstanceSettings) (*Settings, error) {
 		return nil, fmt.Errorf("failed to parse settings: %w", err)
 	}
 	settings.URL = s.URL
-	// Read service account token from encrypted secure JSON data
-	if token, ok := s.DecryptedSecureJSONData["grafanaServiceAccountToken"]; ok {
-		settings.GrafanaServiceAccountToken = token
+	// Read Grafana admin credentials from encrypted secure JSON data
+	if user, ok := s.DecryptedSecureJSONData["grafanaAdminUser"]; ok {
+		settings.GrafanaAdminUser = user
+	}
+	if pass, ok := s.DecryptedSecureJSONData["grafanaAdminPassword"]; ok {
+		settings.GrafanaAdminPassword = pass
 	}
 	return settings, nil
 }
@@ -254,7 +259,7 @@ func (d *Datasource) handleAuthStatus(w http.ResponseWriter, r *http.Request) {
 
 	// Check if Grafana org exists for this tenant
 	orgProvisioned := true
-	if d.settings.GrafanaServiceAccountToken != "" {
+	if d.hasGrafanaAdminCredentials() {
 		orgProvisioned = d.checkTenantOrgExists("http://localhost:3000")
 	}
 
@@ -314,11 +319,16 @@ func (d *Datasource) handleAuthCallback(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	_, err := d.tokenManager.HandleCallback(state, code, d.settings)
+	entry, err := d.tokenManager.HandleCallback(state, code, d.settings)
 	if err != nil {
 		d.logger.Error("Auth callback failed", "error", err)
 		writeCallbackHTML(w, false, fmt.Sprintf("Authentication failed: %s", err.Error()))
 		return
+	}
+
+	// Add user to the tenant's Grafana org (if provisioned)
+	if entry.UserLogin != "" {
+		d.addUserToTenantOrg("http://localhost:3000", entry.UserLogin)
 	}
 
 	writeCallbackHTML(w, true, "Authentication successful")

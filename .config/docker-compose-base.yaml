@@ -24,6 +24,8 @@ services:
       GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS: grafana-octo-mesh-datasource
       # Disable anonymous auth when using OAuth
       GF_AUTH_ANONYMOUS_ENABLED: "false"
+      # Enable basic auth for Server Admin API (required for org management)
+      GF_AUTH_BASIC_ENABLED: "true"
       # OAuth configuration for OctoMesh Identity
       GF_AUTH_GENERIC_OAUTH_ENABLED: "true"
       GF_AUTH_GENERIC_OAUTH_NAME: "OctoMesh"
