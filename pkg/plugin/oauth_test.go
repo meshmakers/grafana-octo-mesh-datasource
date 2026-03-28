@@ -14,7 +14,8 @@ import (
 
 func newTestTokenManager() *TokenManager {
 	return &TokenManager{
-		logger: log.DefaultLogger,
+		logger:      log.DefaultLogger,
+		stopCleanup: make(chan struct{}),
 	}
 }
 

@@ -28,7 +28,7 @@ services:
       GF_AUTH_GENERIC_OAUTH_ENABLED: "true"
       GF_AUTH_GENERIC_OAUTH_NAME: "OctoMesh"
       GF_AUTH_GENERIC_OAUTH_CLIENT_ID: "grafana-test"
-      GF_AUTH_GENERIC_OAUTH_SCOPES: "openid profile email assetTenantAPI.full_access assetSystemAPI.full_access"
+      GF_AUTH_GENERIC_OAUTH_SCOPES: "openid profile email role allowed_tenants octo_api"
       # Auth URL is accessed by browser (use localhost)
       GF_AUTH_GENERIC_OAUTH_AUTH_URL: "https://localhost:5003/connect/authorize"
       # Token URL is accessed by Grafana server (use docker internal)

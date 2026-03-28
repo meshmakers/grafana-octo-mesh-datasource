@@ -13,5 +13,5 @@ datasources:
       tenantId: 'meshtest'
       identityServerUrl: 'https://host.docker.internal:5003'
       oauthClientId: 'grafana-datasource'
-      oauthScopes: 'openid profile email assetTenantAPI.full_access offline_access'
+      oauthScopes: 'openid profile email octo_api offline_access'
       tlsSkipVerify: true

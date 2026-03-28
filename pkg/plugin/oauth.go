@@ -59,16 +59,24 @@ type TokenManager struct {
 	// pendingFlows stores PendingAuth keyed by state parameter
 	pendingFlows sync.Map
 	logger       log.Logger
+	// stopCleanup signals the cleanup goroutine to stop
+	stopCleanup chan struct{}
 }
 
 // NewTokenManager creates a new TokenManager.
 func NewTokenManager(logger log.Logger) *TokenManager {
 	tm := &TokenManager{
-		logger: logger,
+		logger:      logger,
+		stopCleanup: make(chan struct{}),
 	}
 	// Start cleanup goroutine for expired pending flows
 	go tm.cleanupPendingFlows()
 	return tm
+}
+
+// Stop signals the cleanup goroutine to exit.
+func (tm *TokenManager) Stop() {
+	close(tm.stopCleanup)
 }
 
 func tokenKey(userLogin, tenantID string) string {
@@ -150,7 +158,7 @@ func (tm *TokenManager) StartAuth(userLogin, tenantID string, settings *Settings
 
 	scopes := settings.OAuthScopes
 	if scopes == "" {
-		scopes = "openid profile email assetTenantAPI.full_access offline_access"
+		scopes = "openid profile email octo_api offline_access"
 	}
 
 	authorizeURL := fmt.Sprintf("%s/connect/authorize", strings.TrimRight(settings.IdentityServerURL, "/"))
@@ -282,18 +290,24 @@ func (tm *TokenManager) doTokenRequest(tokenURL string, params url.Values, tlsSk
 }
 
 // cleanupPendingFlows removes expired pending authorization flows every minute.
+// Stops when the stopCleanup channel is closed.
 func (tm *TokenManager) cleanupPendingFlows() {
 	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		tm.pendingFlows.Range(func(key, value interface{}) bool {
-			pending := value.(*PendingAuth)
-			if time.Since(pending.CreatedAt) > 10*time.Minute {
-				tm.pendingFlows.Delete(key)
-			}
-			return true
-		})
+	for {
+		select {
+		case <-tm.stopCleanup:
+			return
+		case <-ticker.C:
+			tm.pendingFlows.Range(func(key, value interface{}) bool {
+				pending := value.(*PendingAuth)
+				if time.Since(pending.CreatedAt) > 10*time.Minute {
+					tm.pendingFlows.Delete(key)
+				}
+				return true
+			})
+		}
 	}
 }
 

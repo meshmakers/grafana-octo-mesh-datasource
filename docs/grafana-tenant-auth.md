@@ -104,6 +104,25 @@ This approach replaces Grafana's standard `oauthPassThru` mechanism (which forwa
 - **Refresh tokens**: When `offline_access` scope is included and the token expires, use the refresh token to obtain a new access token without user interaction
 - **Token lifetime**: Access tokens are valid for 3600 seconds (default). With refresh tokens, the user only re-authenticates when the refresh token expires or the Identity Server session cookie expires.
 
+## Why the Go Backend Is Required
+
+The `TenantAuthorizationMiddleware` in `octo-common-services` validates that the token's `tenant_id` claim **exactly matches** the API route's tenant. It does **not** check `allowed_tenants`. This means a single OAuth token cannot be used across multiple tenants -- each tenant requires its own token.
+
+Grafana's built-in `oauthPassThru` forwards a single global token, which only has one `tenant_id`. When a user switches Grafana organizations (each mapped to a different tenant), the forwarded token's `tenant_id` would mismatch, resulting in 403. The Go backend solves this by managing per-user, per-tenant tokens independently.
+
+## Grafana Login (Tenant Discovery)
+
+For the initial Grafana login, the Identity Server provides a **tenant discovery flow**. When Grafana's OAuth sends `/connect/authorize` without `acr_values`, the Identity Server redirects to a tenant picker page where the user enters their email to discover their tenant. After selection, the login proceeds with `acr_values=tenant:{selectedTenant}`.
+
+The Grafana login token includes `allowed_tenants` as an array claim (via the `allowed_tenants` IdentityResource). Grafana uses this for `org_attribute_path` to auto-assign users to the correct organizations:
+
+```ini
+[auth.generic_oauth]
+org_attribute_path = allowed_tenants
+org_mapping = meshtest:Meshtest:Viewer sbeg:SBEG:Editor
+scopes = openid profile email role allowed_tenants
+```
+
 ## Evaluated and Rejected Alternatives
 
 | Approach | Why Rejected |
@@ -111,20 +130,22 @@ This approach replaces Grafana's standard `oauthPassThru` mechanism (which forwa
 | **RFC 8693 Token Exchange** | Unnecessary complexity. Users don't exist in the System-Tenant, so there's no source token to exchange. The `acr_values` approach is simpler and direct. |
 | **Separate Grafana instances** | Operational overhead (N instances to maintain). One instance with multiple organizations is preferred. |
 | **Client Credentials per Datasource** | Loses user identity. Audit trails show only the service account, not the actual user. |
-| **Middleware Relaxation** | Security risk. Scopes and roles from the wrong tenant would be used. |
+| **Middleware Relaxation** | Security risk. `TenantAuthorizationMiddleware` checks `tenant_id` not `allowed_tenants` by design -- the token must be scoped to the specific tenant. |
+| **Grafana oauthPassThru only** | Fails because the Grafana login token has a single `tenant_id`. Org switching would cause 403 for non-login tenants. |
 
 ## Identity Server Reference
 
 The Identity Server's tenant-specific OAuth capability is documented in the identity server repository:
 
-- `docs/CONCEPT-TENANT-SPECIFIC-OAUTH.md` -- Full documentation of the `acr_values` mechanism
+- `docs/CONCEPT-TENANT-SPECIFIC-OAUTH.md` -- Full documentation of the `acr_values` mechanism, tenant discovery flow, and `allowed_tenants` IdentityResource
 - `docs/authentication.md` -- Tenant resolution and token endpoint architecture
 
 Key Identity Server components involved:
 
 | Component | Role |
 |-----------|------|
-| `OidcTenantResolutionMiddleware` | Parses `acr_values=tenant:{tenantId}` from authorize requests |
+| `OidcTenantResolutionMiddleware` | Parses `acr_values=tenant:{tenantId}` from authorize requests; redirects to tenant discovery when missing |
 | `TenantLoginRedirectMiddleware` | Redirects to the tenant-specific login page |
+| `TenantDiscoveryService` | Searches all tenants for a user by email/username (for tenant picker) |
 | `UserProfileService` | Adds `tenant_id` and `allowed_tenants` claims to tokens |
 | `TenantCookieManager` | Per-tenant cookie scoping for concurrent multi-tenant sessions |

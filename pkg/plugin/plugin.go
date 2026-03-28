@@ -23,6 +23,7 @@ type Datasource struct {
 	resourceHandler backend.CallResourceHandler
 	settings        *Settings
 	tokenManager    *TokenManager
+	httpClient      *http.Client
 	logger          log.Logger
 }
 
@@ -56,6 +57,7 @@ func NewDatasource(_ context.Context, s backend.DataSourceInstanceSettings) (ins
 	ds := &Datasource{
 		settings:     settings,
 		tokenManager: tokenManager,
+		httpClient:   newProxyClient(settings.TLSSkipVerify),
 		logger:       logger,
 	}
 
@@ -75,7 +77,7 @@ func NewDatasource(_ context.Context, s backend.DataSourceInstanceSettings) (ins
 }
 
 func (d *Datasource) Dispose() {
-	// Clean up resources if needed
+	d.tokenManager.Stop()
 }
 
 func (d *Datasource) QueryData(ctx context.Context, req *backend.QueryDataRequest) (*backend.QueryDataResponse, error) {
@@ -154,7 +156,7 @@ func (d *Datasource) handleQuery(ctx context.Context, q backend.DataQuery, userL
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token.AccessToken))
 
-	resp, err := proxyClient(d.settings.TLSSkipVerify).Do(httpReq)
+	resp, err := d.httpClient.Do(httpReq)
 	if err != nil {
 		return backend.DataResponse{
 			Error:  fmt.Errorf("GraphQL request failed: %w", err),
@@ -345,7 +347,7 @@ func writeCallbackHTML(w http.ResponseWriter, success bool, message string) {
       type: 'octo-mesh-auth-callback',
       success: %s,
       message: %q
-    }, '*');
+    }, window.location.origin);
     setTimeout(function() { window.close(); }, 1000);
   } else {
     document.body.innerHTML += '<p>You may close this window.</p>';

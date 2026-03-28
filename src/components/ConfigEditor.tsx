@@ -167,9 +167,9 @@ export function ConfigEditor(props: Props) {
         >
           <Input
             id="config-editor-oauth-scopes"
-            value={jsonData.oauthScopes ?? 'openid profile email assetTenantAPI.full_access offline_access'}
+            value={jsonData.oauthScopes ?? 'openid profile email octo_api offline_access'}
             onChange={onOAuthScopesChange}
-            placeholder="openid profile email assetTenantAPI.full_access offline_access"
+            placeholder="openid profile email octo_api offline_access"
             width={60}
           />
         </InlineField>

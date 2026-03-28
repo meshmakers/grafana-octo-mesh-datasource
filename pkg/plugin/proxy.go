@@ -5,22 +5,30 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"strings"
 	"time"
 )
 
-// proxyClient creates an HTTP client respecting TLS settings.
-func proxyClient(tlsSkipVerify bool) *http.Client {
-	client := &http.Client{
-		Timeout: 60 * time.Second,
+// newProxyClient creates a reusable HTTP client with connection pooling.
+func newProxyClient(tlsSkipVerify bool) *http.Client {
+	transport := &http.Transport{
+		MaxIdleConns:        20,
+		MaxIdleConnsPerHost: 10,
+		IdleConnTimeout:     90 * time.Second,
+		DialContext: (&net.Dialer{
+			Timeout:   30 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).DialContext,
 	}
 	if tlsSkipVerify {
-		client.Transport = &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec // User-configured for dev
-		}
+		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true} //nolint:gosec // User-configured for dev
 	}
-	return client
+	return &http.Client{
+		Timeout:   60 * time.Second,
+		Transport: transport,
+	}
 }
 
 // handleProxyTenants proxies GET /resources/tenants to the OctoMesh system API.
@@ -44,7 +52,7 @@ func (d *Datasource) handleProxyTenants(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 
-	resp, err := proxyClient(d.settings.TLSSkipVerify).Do(req)
+	resp, err := d.httpClient.Do(req)
 	if err != nil {
 		writeJSON(w, http.StatusBadGateway, map[string]interface{}{"error": fmt.Sprintf("Failed to reach OctoMesh: %s", err.Error())})
 		return
@@ -88,7 +96,7 @@ func (d *Datasource) handleProxyGraphQL(w http.ResponseWriter, r *http.Request) 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token.AccessToken))
 
-	resp, err := proxyClient(d.settings.TLSSkipVerify).Do(req)
+	resp, err := d.httpClient.Do(req)
 	if err != nil {
 		writeJSON(w, http.StatusBadGateway, map[string]interface{}{"error": fmt.Sprintf("GraphQL request failed: %s", err.Error())})
 		return
@@ -119,7 +127,7 @@ func (d *Datasource) handleProxySystemAPI(w http.ResponseWriter, r *http.Request
 		}
 	}
 
-	resp, err := proxyClient(d.settings.TLSSkipVerify).Do(req)
+	resp, err := d.httpClient.Do(req)
 	if err != nil {
 		writeJSON(w, http.StatusBadGateway, map[string]interface{}{"error": fmt.Sprintf("System API request failed: %s", err.Error())})
 		return
