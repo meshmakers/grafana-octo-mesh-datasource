@@ -1,0 +1,35 @@
+$schema: https://schemas.meshmakers.cloud/runtime-model.schema.json
+dependencies: []
+entities:
+- rtId: 67e6a00000000000b0000001
+  ckTypeId: System.Communication/DataPipeline
+  associations: []
+  attributes:
+  - id: System/Name
+    value: Grafana - Deprovision Tenant
+  - id: System/Description
+    value: Removes the Grafana organization for the current tenant. Requires a GrafanaConfiguration entity named 'GrafanaServer'.
+- rtId: 67e6a00000000000b0000002
+  ckTypeId: System.Communication/MeshPipeline
+  associations:
+  - roleId: System/ParentChild
+    targetRtId: 67e6a00000000000b0000001
+    targetCkTypeId: System.Communication/DataPipeline
+  - roleId: System.Communication/Executes
+    targetRtId: 66004fda527ac79a03ecedd7
+    targetCkTypeId: System.Communication/MeshAdapter
+  attributes:
+  - id: System.Communication/DeploymentState
+    value: 0
+  - id: System/Name
+    value: Mesh Pipeline
+  - id: System/Enabled
+    value: true
+  - id: System.Communication/PipelineDefinition
+    value: >-
+      triggers:
+        - type: FromExecutePipelineCommand@1
+      transformations:
+        - type: GrafanaDeprovisionTenant@1
+          serverConfiguration: GrafanaServer
+          targetPath: $.result
