@@ -75,6 +75,9 @@ func NewDatasource(_ context.Context, s backend.DataSourceInstanceSettings) (ins
 	mux.HandleFunc("GET /tenants", ds.handleProxyTenants)
 	mux.HandleFunc("POST /graphql", ds.handleProxyGraphQL)
 	mux.HandleFunc("/system/", ds.handleProxySystemAPI)
+	// Admin endpoints — provision/deprovision Grafana org + datasource for a tenant
+	mux.HandleFunc("POST /admin/provision-tenant", ds.handleProvisionTenant)
+	mux.HandleFunc("POST /admin/deprovision-tenant", ds.handleDeprovisionTenant)
 
 	ds.resourceHandler = httpadapter.New(mux)
 
@@ -249,10 +252,17 @@ func (d *Datasource) handleAuthStatus(w http.ResponseWriter, r *http.Request) {
 
 	hasToken := d.tokenManager.HasToken(userLogin, d.settings.TenantID)
 
+	// Check if Grafana org exists for this tenant
+	orgProvisioned := true
+	if d.settings.GrafanaServiceAccountToken != "" {
+		orgProvisioned = d.checkTenantOrgExists("http://localhost:3000")
+	}
+
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"authenticated": hasToken,
-		"tenantId":      d.settings.TenantID,
-		"userLogin":     userLogin,
+		"authenticated":  hasToken,
+		"tenantId":       d.settings.TenantID,
+		"userLogin":      userLogin,
+		"orgProvisioned": orgProvisioned,
 	})
 }
 
@@ -304,25 +314,11 @@ func (d *Datasource) handleAuthCallback(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	entry, err := d.tokenManager.HandleCallback(state, code, d.settings)
+	_, err := d.tokenManager.HandleCallback(state, code, d.settings)
 	if err != nil {
 		d.logger.Error("Auth callback failed", "error", err)
 		writeCallbackHTML(w, false, fmt.Sprintf("Authentication failed: %s", err.Error()))
 		return
-	}
-
-	// Auto-create Grafana org for tenant if service account token is configured
-	if d.settings.GrafanaServiceAccountToken != "" && entry.UserLogin != "" {
-		grafanaBaseURL := fmt.Sprintf("%s://%s", r.URL.Scheme, r.Host)
-		if grafanaBaseURL == "://" {
-			// Fallback: use Origin or Referer header, or default
-			if origin := r.Header.Get("Origin"); origin != "" {
-				grafanaBaseURL = origin
-			} else {
-				grafanaBaseURL = "http://localhost:3000"
-			}
-		}
-		d.ensureGrafanaOrg(grafanaBaseURL, entry.UserLogin)
 	}
 
 	writeCallbackHTML(w, true, "Authentication successful")
