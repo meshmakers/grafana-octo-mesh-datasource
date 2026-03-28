@@ -6,10 +6,9 @@ dependencies: []
 entities:
 - rtId: 67e6a00000000000c0000001
   ckTypeId: System.Communication/GrafanaConfiguration
+  rtWellKnownName: GrafanaServer
   associations: []
   attributes:
-  - id: System/Name
-    value: GrafanaServer
   - id: System.Communication/GrafanaUrl
     value: http://grafana.grafana.svc.cluster.local:80
   - id: System.Communication/AdminUser
