@@ -15,9 +15,6 @@ entities:
   - roleId: System/ParentChild
     targetRtId: 67e6a00000000000b0000001
     targetCkTypeId: System.Communication/DataPipeline
-  - roleId: System.Communication/Executes
-    targetRtId: 66004fda527ac79a03ecedd7
-    targetCkTypeId: System.Communication/MeshAdapter
   attributes:
   - id: System.Communication/DeploymentState
     value: 0
