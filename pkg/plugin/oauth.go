@@ -24,6 +24,7 @@ type TokenEntry struct {
 	TokenType    string    `json:"token_type"`
 	ExpiresAt    time.Time `json:"expires_at"`
 	TenantID     string    `json:"tenant_id"`
+	UserLogin    string    `json:"user_login,omitempty"`
 }
 
 // IsExpired returns true if the token is expired or will expire within the buffer period.
@@ -207,6 +208,7 @@ func (tm *TokenManager) HandleCallback(state, code string, settings *Settings) (
 	}
 
 	entry.TenantID = pending.TenantID
+	entry.UserLogin = pending.UserLogin
 
 	key := tokenKey(pending.UserLogin, pending.TenantID)
 	tm.tokens.Store(key, entry)

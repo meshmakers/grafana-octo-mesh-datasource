@@ -96,7 +96,8 @@ export interface OctoMeshDataSourceOptions extends DataSourceJsonData {
  * Secure configuration (stored encrypted, backend only)
  */
 export interface OctoMeshSecureJsonData {
-  // Reserved for future use (e.g., API keys if not using OAuth)
+  /** Grafana Service Account token for auto-creating organizations per tenant */
+  grafanaServiceAccountToken?: string;
 }
 
 /**

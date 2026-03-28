@@ -84,6 +84,36 @@ For multiple tenants, create separate Grafana Organizations with dedicated datas
     oauthClientId: 'grafana-datasource'
 ```
 
+### 4. Grafana Service Account for Auto-Org Creation
+
+The plugin can automatically create Grafana Organizations per tenant when a user authenticates. This requires a Grafana Service Account token with Admin role.
+
+**Create via Grafana API:**
+```bash
+# Create service account
+curl -X POST http://localhost:3000/api/serviceaccounts \
+  -H "Authorization: Basic $(echo -n admin:admin | base64)" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"octo-mesh-plugin","role":"Admin"}'
+
+# Create token (use the id from above response)
+curl -X POST http://localhost:3000/api/serviceaccounts/{id}/tokens \
+  -H "Authorization: Basic $(echo -n admin:admin | base64)" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"octo-mesh-plugin-token"}'
+```
+
+Configure the returned token in the datasource settings under **Authentication > Service Account Token**, or via provisioning:
+```yaml
+secureJsonData:
+  grafanaServiceAccountToken: 'glsa_...'
+```
+
+When configured, the plugin will:
+1. After successful tenant authentication, check if a Grafana org named `{tenantId}` exists
+2. Create the org if it doesn't exist
+3. Add the user to the org as Editor
+
 ## Authentication Flow
 
 1. User opens a dashboard with an OctoMesh datasource

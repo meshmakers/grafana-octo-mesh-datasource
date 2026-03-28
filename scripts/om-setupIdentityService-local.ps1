@@ -67,6 +67,36 @@ octo-cli -c AddAuthorizationCodeClient `
 
 Write-Host "  -> Client '$grafanaDsClientId' created" -ForegroundColor Green
 
+# --- 3. Grafana Service Account (for auto-creating organizations) ---
+# Only needs to run once per Grafana instance, not per tenant.
+
+Write-Host "Creating Grafana service account for org management..." -ForegroundColor Yellow
+
+$grafanaAdminAuth = "admin:admin"
+$grafanaApiUrl = "http://localhost:3000"
+
+# Create service account
+$saResponse = Invoke-RestMethod -Uri "$grafanaApiUrl/api/serviceaccounts" `
+    -Method Post `
+    -Headers @{ Authorization = "Basic " + [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes($grafanaAdminAuth)) } `
+    -ContentType "application/json" `
+    -Body '{"name":"octo-mesh-plugin","role":"Admin"}' `
+    -ErrorAction SilentlyContinue
+
+if ($saResponse.id) {
+    # Create token for the service account
+    $tokenResponse = Invoke-RestMethod -Uri "$grafanaApiUrl/api/serviceaccounts/$($saResponse.id)/tokens" `
+        -Method Post `
+        -Headers @{ Authorization = "Basic " + [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes($grafanaAdminAuth)) } `
+        -ContentType "application/json" `
+        -Body '{"name":"octo-mesh-plugin-token"}'
+
+    Write-Host "  -> Service account created. Token: $($tokenResponse.key)" -ForegroundColor Green
+    Write-Host "  -> Set GRAFANA_SA_TOKEN=$($tokenResponse.key) in docker-compose or datasource config" -ForegroundColor Yellow
+} else {
+    Write-Host "  -> Service account may already exist (skipped)" -ForegroundColor DarkYellow
+}
+
 Write-Host ""
 Write-Host "=== Setup Complete ===" -ForegroundColor Cyan
 Write-Host ""
@@ -83,4 +113,5 @@ Write-Host "  3. Configure the OctoMesh datasource in Grafana:"
 Write-Host "       Identity Server URL: https://localhost:5003"
 Write-Host "       Client ID: grafana-datasource"
 Write-Host "       Tenant ID: <your-tenant>"
+Write-Host "       Service Account Token: (from step above)"
 Write-Host ""

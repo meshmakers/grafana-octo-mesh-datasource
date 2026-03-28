@@ -1,5 +1,5 @@
 import React, { ChangeEvent, useRef, useEffect } from 'react';
-import { FieldSet, InlineField, Input, Stack, Switch, Tooltip, Icon, useStyles2 } from '@grafana/ui';
+import { FieldSet, InlineField, Input, SecretInput, Stack, Switch, Tooltip, Icon, useStyles2 } from '@grafana/ui';
 import { css } from '@emotion/css';
 import { DataSourcePluginOptionsEditorProps, GrafanaTheme2 } from '@grafana/data';
 import { OctoMeshDataSourceOptions, OctoMeshSecureJsonData } from '../types';
@@ -88,6 +88,30 @@ export function ConfigEditor(props: Props) {
     });
   };
 
+  const onServiceAccountTokenChange = (value: string) => {
+    onOptionsChange({
+      ...options,
+      secureJsonData: {
+        ...options.secureJsonData,
+        grafanaServiceAccountToken: value,
+      },
+    });
+  };
+
+  const onServiceAccountTokenReset = () => {
+    onOptionsChange({
+      ...options,
+      secureJsonFields: {
+        ...options.secureJsonFields,
+        grafanaServiceAccountToken: false,
+      },
+      secureJsonData: {
+        ...options.secureJsonData,
+        grafanaServiceAccountToken: '',
+      },
+    });
+  };
+
   return (
     <>
       <FieldSet label="Connection">
@@ -170,6 +194,22 @@ export function ConfigEditor(props: Props) {
             value={jsonData.oauthScopes ?? 'openid profile email octo_api offline_access'}
             onChange={onOAuthScopesChange}
             placeholder="openid profile email octo_api offline_access"
+            width={60}
+          />
+        </InlineField>
+
+        <InlineField
+          label="Service Account Token"
+          labelWidth={20}
+          tooltip="Grafana Service Account token with Admin role. Used to auto-create organizations per tenant."
+        >
+          <SecretInput
+            id="config-editor-sa-token"
+            isConfigured={!!options.secureJsonFields?.grafanaServiceAccountToken}
+            value={options.secureJsonData?.grafanaServiceAccountToken ?? ''}
+            onChange={(e) => onServiceAccountTokenChange(e.currentTarget.value)}
+            onReset={onServiceAccountTokenReset}
+            placeholder="glsa_..."
             width={60}
           />
         </InlineField>

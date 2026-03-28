@@ -28,12 +28,13 @@ type Datasource struct {
 }
 
 type Settings struct {
-	TenantID          string `json:"tenantId"`
-	IdentityServerURL string `json:"identityServerUrl"`
-	OAuthClientID     string `json:"oauthClientId"`
-	OAuthScopes       string `json:"oauthScopes"`
-	TLSSkipVerify     bool   `json:"tlsSkipVerify"`
-	URL               string `json:"-"`
+	TenantID                   string `json:"tenantId"`
+	IdentityServerURL          string `json:"identityServerUrl"`
+	OAuthClientID              string `json:"oauthClientId"`
+	OAuthScopes                string `json:"oauthScopes"`
+	TLSSkipVerify              bool   `json:"tlsSkipVerify"`
+	GrafanaServiceAccountToken string `json:"-"` // From secureJsonData
+	URL                        string `json:"-"`
 }
 
 func parseSettings(s backend.DataSourceInstanceSettings) (*Settings, error) {
@@ -42,6 +43,10 @@ func parseSettings(s backend.DataSourceInstanceSettings) (*Settings, error) {
 		return nil, fmt.Errorf("failed to parse settings: %w", err)
 	}
 	settings.URL = s.URL
+	// Read service account token from encrypted secure JSON data
+	if token, ok := s.DecryptedSecureJSONData["grafanaServiceAccountToken"]; ok {
+		settings.GrafanaServiceAccountToken = token
+	}
 	return settings, nil
 }
 
@@ -299,11 +304,25 @@ func (d *Datasource) handleAuthCallback(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	_, err := d.tokenManager.HandleCallback(state, code, d.settings)
+	entry, err := d.tokenManager.HandleCallback(state, code, d.settings)
 	if err != nil {
 		d.logger.Error("Auth callback failed", "error", err)
 		writeCallbackHTML(w, false, fmt.Sprintf("Authentication failed: %s", err.Error()))
 		return
+	}
+
+	// Auto-create Grafana org for tenant if service account token is configured
+	if d.settings.GrafanaServiceAccountToken != "" && entry.UserLogin != "" {
+		grafanaBaseURL := fmt.Sprintf("%s://%s", r.URL.Scheme, r.Host)
+		if grafanaBaseURL == "://" {
+			// Fallback: use Origin or Referer header, or default
+			if origin := r.Header.Get("Origin"); origin != "" {
+				grafanaBaseURL = origin
+			} else {
+				grafanaBaseURL = "http://localhost:3000"
+			}
+		}
+		d.ensureGrafanaOrg(grafanaBaseURL, entry.UserLogin)
 	}
 
 	writeCallbackHTML(w, true, "Authentication successful")
