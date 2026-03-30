@@ -82,10 +82,14 @@ func (d *Datasource) handleProvisionTenant(w http.ResponseWriter, r *http.Reques
 		d.logger.Warn("Failed to create datasource in org (may already exist)", "org", orgName, "error", dsErr)
 	}
 
+	// Add all existing OAuth users to the new org so they can switch to it
+	usersAdded := d.addAllOAuthUsersToOrg(grafanaBaseURL, orgID)
+
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"message": fmt.Sprintf("Tenant '%s' provisioned in Grafana org %d", orgName, orgID),
-		"orgId":   orgID,
-		"orgName": orgName,
+		"message":    fmt.Sprintf("Tenant '%s' provisioned in Grafana org %d", orgName, orgID),
+		"orgId":      orgID,
+		"orgName":    orgName,
+		"usersAdded": usersAdded,
 	})
 }
 
@@ -172,6 +176,98 @@ func (d *Datasource) addUserToTenantOrg(grafanaBaseURL, userLogin string) {
 	} else {
 		d.logger.Info("Added user to tenant org", "tenant", d.settings.TenantID, "user", userLogin, "orgId", org.ID)
 	}
+}
+
+// addUserToAllTenantOrgs adds the user to all provisioned tenant orgs (all orgs except "Main Org.").
+// Called on every auth status check so new users get access to existing tenant orgs.
+func (d *Datasource) addUserToAllTenantOrgs(grafanaBaseURL, userLogin string) {
+	if !d.hasGrafanaAdminCredentials() || userLogin == "" {
+		return
+	}
+
+	url := fmt.Sprintf("%s/api/orgs", grafanaBaseURL)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return
+	}
+	req.Header.Set("Authorization", d.grafanaBasicAuth())
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return
+	}
+
+	var orgs []grafanaOrg
+	if err := json.NewDecoder(resp.Body).Decode(&orgs); err != nil {
+		return
+	}
+
+	for _, org := range orgs {
+		if org.Name == "Main Org." || org.ID <= 1 {
+			continue
+		}
+		// Best-effort: add user as Viewer, ignore if already member (409)
+		_ = d.addUserToOrg(grafanaBaseURL, org.ID, userLogin, "Viewer")
+	}
+}
+
+// addAllOAuthUsersToOrg lists all Grafana users and adds OAuth-authenticated ones to the org.
+func (d *Datasource) addAllOAuthUsersToOrg(grafanaBaseURL string, orgID int64) int {
+	url := fmt.Sprintf("%s/api/users?perpage=1000", grafanaBaseURL)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		d.logger.Warn("Failed to list users for org assignment", "error", err)
+		return 0
+	}
+	req.Header.Set("Authorization", d.grafanaBasicAuth())
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		d.logger.Warn("Failed to list users for org assignment", "error", err)
+		return 0
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return 0
+	}
+
+	var users []struct {
+		ID         int64    `json:"id"`
+		Login      string   `json:"login"`
+		AuthLabels []string `json:"authLabels"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&users); err != nil {
+		return 0
+	}
+
+	added := 0
+	for _, u := range users {
+		// Only add OAuth users (not the built-in admin)
+		isOAuth := false
+		for _, label := range u.AuthLabels {
+			if label == "Generic OAuth" || label == "OAuth" {
+				isOAuth = true
+				break
+			}
+		}
+		if !isOAuth {
+			continue
+		}
+
+		if err := d.addUserToOrg(grafanaBaseURL, orgID, u.Login, "Viewer"); err == nil {
+			added++
+			d.logger.Debug("Added OAuth user to provisioned org", "user", u.Login, "orgId", orgID)
+		}
+	}
+
+	d.logger.Info("Added OAuth users to provisioned org", "orgId", orgID, "count", added)
+	return added
 }
 
 // ─── Grafana Admin API helpers ──────────────────────────────────────
