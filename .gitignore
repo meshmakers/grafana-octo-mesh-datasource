@@ -47,3 +47,4 @@ ci/
 
 # Go
 vendor/
+.DS_Store
