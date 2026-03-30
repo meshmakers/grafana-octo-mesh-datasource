@@ -231,7 +231,7 @@ func (d *Datasource) addUserToAllTenantOrgs(grafanaBaseURL, userLogin string) {
 			continue
 		}
 		// Best-effort: add user as Viewer, ignore if already member (409)
-		_ = d.addUserToOrg(grafanaBaseURL, org.ID, userLogin, "Viewer")
+		_ = d.addUserToOrg(grafanaBaseURL, org.ID, userLogin, "Editor")
 	}
 }
 
@@ -279,7 +279,7 @@ func (d *Datasource) addAllOAuthUsersToOrg(grafanaBaseURL string, orgID int64) i
 			continue
 		}
 
-		if err := d.addUserToOrg(grafanaBaseURL, orgID, u.Login, "Viewer"); err == nil {
+		if err := d.addUserToOrg(grafanaBaseURL, orgID, u.Login, "Editor"); err == nil {
 			added++
 			d.logger.Debug("Added OAuth user to provisioned org", "user", u.Login, "orgId", orgID)
 		}
