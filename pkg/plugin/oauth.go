@@ -17,6 +17,13 @@ import (
 	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
 )
 
+// internalURL rewrites browser-facing URLs (localhost) to container-internal URLs
+// (host.docker.internal) for backend-to-backend calls. The authorize URL uses the
+// browser-facing URL (user's browser), but the token exchange runs server-side.
+func internalURL(browserURL string) string {
+	return strings.Replace(browserURL, "://localhost:", "://host.docker.internal:", 1)
+}
+
 // TokenEntry holds a cached OAuth token for a specific user/tenant combination.
 type TokenEntry struct {
 	AccessToken  string    `json:"access_token"`
@@ -192,7 +199,7 @@ func (tm *TokenManager) HandleCallback(state, code string, settings *Settings) (
 		return nil, fmt.Errorf("authorization flow expired")
 	}
 
-	tokenURL := fmt.Sprintf("%s/connect/token", strings.TrimRight(settings.IdentityServerURL, "/"))
+	tokenURL := fmt.Sprintf("%s/connect/token", strings.TrimRight(internalURL(settings.IdentityServerURL), "/"))
 
 	params := url.Values{
 		"grant_type":    {"authorization_code"},
@@ -219,7 +226,7 @@ func (tm *TokenManager) HandleCallback(state, code string, settings *Settings) (
 
 // refreshToken uses the refresh token to obtain a new access token.
 func (tm *TokenManager) refreshToken(entry *TokenEntry, settings *Settings) (*TokenEntry, error) {
-	tokenURL := fmt.Sprintf("%s/connect/token", strings.TrimRight(settings.IdentityServerURL, "/"))
+	tokenURL := fmt.Sprintf("%s/connect/token", strings.TrimRight(internalURL(settings.IdentityServerURL), "/"))
 
 	params := url.Values{
 		"grant_type":    {"refresh_token"},
