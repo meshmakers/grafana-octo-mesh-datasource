@@ -11,6 +11,17 @@
       "type": "text",
       "title": "",
       "gridPos": { "h": 10, "w": 24, "x": 0, "y": 0 },
+      "options": {
+        "mode": "markdown",
+        "content": "# Welcome to OctoMesh Dashboards\n\nUse the **organization switcher** in the top-left corner to switch to your tenant dashboard.\n\nIf you don't see your tenant listed, please contact your administrator to provision it."
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "",
+      "gridPos": { "h": 1, "w": 1, "x": 0, "y": 10 },
+      "transparent": true,
       "datasource": {
         "type": "grafana-octo-mesh-datasource",
         "uid": "${DS_OCTOMESH}"
@@ -25,9 +36,17 @@
           }
         }
       ],
+      "fieldConfig": {
+        "defaults": {
+          "noValue": " "
+        },
+        "overrides": []
+      },
       "options": {
-        "mode": "markdown",
-        "content": "# Welcome to OctoMesh Dashboards\n\nUse the **organization switcher** in the top-left corner to switch to your tenant dashboard.\n\nIf you don't see your tenant listed, please contact your administrator to provision it."
+        "reduceOptions": { "values": false, "calcs": ["count"], "fields": "" },
+        "textMode": "none",
+        "colorMode": "none",
+        "graphMode": "none"
       }
     }
   ],
@@ -43,6 +62,6 @@
     ]
   },
   "time": { "from": "now-6h", "to": "now" },
-  "version": 2,
+  "version": 3,
   "schemaVersion": 39
 }
