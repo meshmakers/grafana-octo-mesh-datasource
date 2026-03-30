@@ -43,6 +43,8 @@ services:
       # Required for OAuth token to be passed to datasources
       GF_AUTH_GENERIC_OAUTH_ALLOW_ASSIGN_GRAFANA_ADMIN: "true"
       GF_AUTH_OAUTH_ALLOW_INSECURE_EMAIL_LOOKUP: "true"
+      # Skip Grafana login page — go directly to OctoMesh OAuth
+      GF_AUTH_GENERIC_OAUTH_AUTO_LOGIN: "true"
       # Map OctoMesh roles to Grafana roles
       GF_AUTH_GENERIC_OAUTH_ROLE_ATTRIBUTE_PATH: "contains(role[*], 'DashboardManagement') && 'Admin' || contains(role[*], 'DashboardViewer') && 'Viewer'"
       GF_AUTH_GENERIC_OAUTH_ROLE_ATTRIBUTE_STRICT: "true"
