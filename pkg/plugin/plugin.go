@@ -102,9 +102,9 @@ func (d *Datasource) QueryData(ctx context.Context, req *backend.QueryDataReques
 		userLogin = req.PluginContext.User.Login
 	}
 
-	// Ensure the user is a member of the tenant org (lazy assignment on first query)
+	// Ensure the user is a member of all provisioned tenant orgs (lazy assignment)
 	if userLogin != "" && d.hasGrafanaAdminCredentials() {
-		d.addUserToTenantOrg("http://localhost:3000", userLogin)
+		d.addUserToAllTenantOrgs("http://localhost:3000", userLogin)
 	}
 
 	for _, q := range req.Queries {

@@ -51,5 +51,7 @@ services:
       GF_USERS_AUTO_ASSIGN_ORG_ROLE: "Viewer"
       # Do NOT sync org membership from OAuth — org assignment is managed by the plugin
       GF_AUTH_GENERIC_OAUTH_SKIP_ORG_ROLE_SYNC: "true"
+      # Set the OctoMesh welcome dashboard as home for Org 1
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: "/etc/grafana/provisioning/dashboards/json/octomesh-welcome.json"
       # Skip TLS verification for all backend requests (dev only!)
       GF_DATAPROXY_TLS_INSECURE_SKIP_VERIFY: "true"
