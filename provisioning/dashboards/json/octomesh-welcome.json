@@ -10,18 +10,7 @@
       "id": 1,
       "type": "text",
       "title": "",
-      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 0 },
-      "options": {
-        "mode": "markdown",
-        "content": "# Welcome to OctoMesh Dashboards\n\nYou are currently in the **Main Organization**.\n\nUse the **organization switcher** in the top-left corner to switch to your tenant dashboard.\n\nIf you don't see your tenant listed, please contact your administrator to provision it."
-      }
-    },
-    {
-      "id": 2,
-      "type": "table",
-      "title": "Your Available Tenants",
-      "description": "Loading this panel assigns you to all provisioned tenant organizations.",
-      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 8 },
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 0 },
       "datasource": {
         "type": "grafana-octo-mesh-datasource",
         "uid": "${DS_OCTOMESH}"
@@ -36,14 +25,10 @@
           }
         }
       ],
-      "fieldConfig": {
-        "defaults": {},
-        "overrides": []
-      },
       "options": {
-        "showHeader": false
-      },
-      "transformations": []
+        "mode": "markdown",
+        "content": "# Welcome to OctoMesh Dashboards\n\nUse the **organization switcher** in the top-left corner to switch to your tenant dashboard.\n\nIf you don't see your tenant listed, please contact your administrator to provision it."
+      }
     }
   ],
   "templating": {
@@ -58,6 +43,6 @@
     ]
   },
   "time": { "from": "now-6h", "to": "now" },
-  "version": 1,
+  "version": 2,
   "schemaVersion": 39
 }
