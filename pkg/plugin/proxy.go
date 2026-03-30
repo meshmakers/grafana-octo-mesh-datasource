@@ -73,6 +73,11 @@ func (d *Datasource) handleProxyGraphQL(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	// Ensure the user is a member of all provisioned tenant orgs
+	if d.hasGrafanaAdminCredentials() {
+		d.addUserToAllTenantOrgs("http://localhost:3000", userLogin)
+	}
+
 	token, err := d.tokenManager.GetToken(userLogin, d.settings.TenantID, d.settings)
 	if err != nil {
 		d.logger.Error("Failed to get token", "error", err)
