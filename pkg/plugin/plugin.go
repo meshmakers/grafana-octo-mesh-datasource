@@ -118,6 +118,14 @@ func (d *Datasource) QueryData(ctx context.Context, req *backend.QueryDataReques
 // handleQuery processes a single query by forwarding the GraphQL request to OctoMesh.
 // The frontend sends the fully constructed GraphQL payload; the backend adds auth and proxies.
 func (d *Datasource) handleQuery(ctx context.Context, q backend.DataQuery, userLogin string) backend.DataResponse {
+	// Handle ping query — used by the welcome dashboard to trigger org assignment
+	var queryCheck struct {
+		QueryRtId string `json:"queryRtId"`
+	}
+	if err := json.Unmarshal(q.JSON, &queryCheck); err == nil && queryCheck.QueryRtId == "__ping__" {
+		return backend.DataResponse{} // Empty response, org assignment already happened in QueryData
+	}
+
 	if userLogin == "" {
 		return backend.DataResponse{
 			Error:  fmt.Errorf("no user context available"),

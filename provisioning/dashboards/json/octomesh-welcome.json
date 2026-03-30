@@ -29,6 +29,7 @@
       "targets": [
         {
           "refId": "A",
+          "queryRtId": "__ping__",
           "datasource": {
             "type": "grafana-octo-mesh-datasource",
             "uid": "${DS_OCTOMESH}"
