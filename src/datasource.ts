@@ -49,12 +49,15 @@ interface AuthStartResponse {
 }
 
 export class DataSource extends DataSourceApi<OctoMeshQuery, OctoMeshDataSourceOptions> {
+  /** Resource endpoint base URL — routes through the Go backend plugin */
   baseUrl: string;
   tenantId?: string;
 
   constructor(instanceSettings: DataSourceInstanceSettings<OctoMeshDataSourceOptions>) {
     super(instanceSettings);
-    this.baseUrl = instanceSettings.url!;
+    // Use the plugin resource endpoint, not the datasource proxy.
+    // The Go backend plugin handles auth, token injection, and org management.
+    this.baseUrl = `/api/datasources/uid/${instanceSettings.uid}/resources`;
     this.tenantId = instanceSettings.jsonData.tenantId;
   }
 
