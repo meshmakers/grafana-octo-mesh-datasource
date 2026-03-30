@@ -13,7 +13,7 @@
       "gridPos": { "h": 10, "w": 24, "x": 0, "y": 0 },
       "options": {
         "mode": "markdown",
-        "content": "# Welcome to OctoMesh Dashboards\n\nUse the **organization switcher** in the top-left corner to switch to your tenant dashboard.\n\nIf you don't see your tenant listed, please contact your administrator to provision it."
+        "content": "# Welcome to OctoMesh Dashboards\n\nUse the **organization switcher** in the top-left corner to switch to your tenant dashboard.\n\nIf you don't see your tenant listed yet, **please reload the page** (F5). It may take one or two reloads until your tenant organizations appear in the switcher.\n\nIf your tenant still doesn't appear after reloading, please contact your administrator to provision it."
       }
     },
     {
