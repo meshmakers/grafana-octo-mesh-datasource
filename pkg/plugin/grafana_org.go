@@ -413,7 +413,11 @@ func (d *Datasource) addUserToOrg(grafanaBaseURL string, orgID int64, loginOrEma
 func (d *Datasource) createDatasourceInOrg(grafanaBaseURL string, orgID int64, tenantId string) error {
 	url := fmt.Sprintf("%s/api/datasources", grafanaBaseURL)
 
+	// Use a deterministic UID based on tenant ID so the OAuth callback URL is predictable
+	dsUID := fmt.Sprintf("octomesh-%s", tenantId)
+
 	dsPayload := map[string]interface{}{
+		"uid":    dsUID,
 		"name":   "OctoMesh",
 		"type":   "grafana-octo-mesh-datasource",
 		"url":    d.settings.URL,
