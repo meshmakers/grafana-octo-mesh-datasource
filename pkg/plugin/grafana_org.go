@@ -15,9 +15,10 @@ type grafanaOrg struct {
 	Name string `json:"name"`
 }
 
-// provisionRequest is the JSON body for the provision-tenant endpoint.
+// provisionRequest is the JSON body for the provision/deprovision-tenant endpoints.
 type provisionRequest struct {
 	GrafanaBaseURL string `json:"grafanaBaseUrl"`
+	TenantID       string `json:"tenantId"`
 }
 
 // grafanaBasicAuth returns the Basic Auth header value for Grafana admin API calls.
@@ -31,7 +32,7 @@ func (d *Datasource) hasGrafanaAdminCredentials() bool {
 	return d.settings.GrafanaAdminUser != "" && d.settings.GrafanaAdminPassword != ""
 }
 
-// handleProvisionTenant creates a Grafana org for the datasource's tenant and
+// handleProvisionTenant creates a Grafana org for a tenant and
 // creates a datasource instance in that org.
 func (d *Datasource) handleProvisionTenant(w http.ResponseWriter, r *http.Request) {
 	if !d.hasGrafanaAdminCredentials() {
@@ -50,7 +51,16 @@ func (d *Datasource) handleProvisionTenant(w http.ResponseWriter, r *http.Reques
 	}
 
 	grafanaBaseURL := strings.TrimRight(req.GrafanaBaseURL, "/")
-	orgName := d.settings.TenantID
+	orgName := req.TenantID
+	if orgName == "" {
+		orgName = d.settings.TenantID
+	}
+	if orgName == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"error": "tenantId is required (in request body or datasource config)",
+		})
+		return
+	}
 
 	// Check if org already exists
 	org, err := d.getOrgByName(grafanaBaseURL, orgName)
@@ -77,7 +87,7 @@ func (d *Datasource) handleProvisionTenant(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Create a datasource in the new org
-	dsErr := d.createDatasourceInOrg(grafanaBaseURL, orgID)
+	dsErr := d.createDatasourceInOrg(grafanaBaseURL, orgID, orgName)
 	if dsErr != nil {
 		d.logger.Warn("Failed to create datasource in org (may already exist)", "org", orgName, "error", dsErr)
 	}
@@ -93,7 +103,7 @@ func (d *Datasource) handleProvisionTenant(w http.ResponseWriter, r *http.Reques
 	})
 }
 
-// handleDeprovisionTenant removes the Grafana org for the datasource's tenant.
+// handleDeprovisionTenant removes the Grafana org for a tenant.
 func (d *Datasource) handleDeprovisionTenant(w http.ResponseWriter, r *http.Request) {
 	if !d.hasGrafanaAdminCredentials() {
 		writeJSON(w, http.StatusBadRequest, map[string]interface{}{
@@ -111,7 +121,16 @@ func (d *Datasource) handleDeprovisionTenant(w http.ResponseWriter, r *http.Requ
 	}
 
 	grafanaBaseURL := strings.TrimRight(req.GrafanaBaseURL, "/")
-	orgName := d.settings.TenantID
+	orgName := req.TenantID
+	if orgName == "" {
+		orgName = d.settings.TenantID
+	}
+	if orgName == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"error": "tenantId is required (in request body or datasource config)",
+		})
+		return
+	}
 
 	org, err := d.getOrgByName(grafanaBaseURL, orgName)
 	if err != nil {
@@ -390,8 +409,8 @@ func (d *Datasource) addUserToOrg(grafanaBaseURL string, orgID int64, loginOrEma
 }
 
 // createDatasourceInOrg creates an OctoMesh datasource in the specified Grafana org.
-// Uses the current datasource's settings as template.
-func (d *Datasource) createDatasourceInOrg(grafanaBaseURL string, orgID int64) error {
+// Uses the current datasource's settings as template, but with the given tenantId.
+func (d *Datasource) createDatasourceInOrg(grafanaBaseURL string, orgID int64, tenantId string) error {
 	url := fmt.Sprintf("%s/api/datasources", grafanaBaseURL)
 
 	dsPayload := map[string]interface{}{
@@ -401,7 +420,7 @@ func (d *Datasource) createDatasourceInOrg(grafanaBaseURL string, orgID int64) e
 		"access": "proxy",
 		"orgId":  orgID,
 		"jsonData": map[string]interface{}{
-			"tenantId":          d.settings.TenantID,
+			"tenantId":          tenantId,
 			"identityServerUrl": d.settings.IdentityServerURL,
 			"oauthClientId":     d.settings.OAuthClientID,
 			"oauthScopes":       d.settings.OAuthScopes,
