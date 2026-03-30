@@ -43,9 +43,10 @@ services:
       # Required for OAuth token to be passed to datasources
       GF_AUTH_GENERIC_OAUTH_ALLOW_ASSIGN_GRAFANA_ADMIN: "true"
       GF_AUTH_OAUTH_ALLOW_INSECURE_EMAIL_LOOKUP: "true"
-      # Make all OAuth users admins for dev
-      GF_AUTH_GENERIC_OAUTH_ROLE_ATTRIBUTE_PATH: "'Admin'"
-      GF_USERS_AUTO_ASSIGN_ORG_ROLE: "Admin"
+      # Map OctoMesh roles to Grafana roles
+      GF_AUTH_GENERIC_OAUTH_ROLE_ATTRIBUTE_PATH: "contains(role[*], 'DashboardManagement') && 'Admin' || contains(role[*], 'DashboardViewer') && 'Viewer'"
+      GF_AUTH_GENERIC_OAUTH_ROLE_ATTRIBUTE_STRICT: "true"
+      GF_USERS_AUTO_ASSIGN_ORG_ROLE: "Viewer"
       # Do NOT sync org membership from OAuth — org assignment is managed by the plugin
       GF_AUTH_GENERIC_OAUTH_SKIP_ORG_ROLE_SYNC: "true"
       # Skip TLS verification for all backend requests (dev only!)
