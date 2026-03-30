@@ -133,6 +133,62 @@ scopes = openid profile email role allowed_tenants
 | **Middleware Relaxation** | Security risk. `TenantAuthorizationMiddleware` checks `tenant_id` not `allowed_tenants` by design -- the token must be scoped to the specific tenant. |
 | **Grafana oauthPassThru only** | Fails because the Grafana login token has a single `tenant_id`. Org switching would cause 403 for non-login tenants. |
 
+## Tenant Organization Provisioning
+
+Grafana organizations are created per tenant via the plugin's admin endpoints or pipeline nodes. The provisioning flow:
+
+1. **Pipeline or API** calls `POST /admin/provision-tenant` with `{ "grafanaBaseUrl": "...", "tenantId": "sbeg" }`
+2. Plugin creates Grafana org named `sbeg` with a datasource (UID: `octomesh-sbeg`)
+3. All existing OAuth users are added to the new org as Editor
+4. New users are assigned on their first dashboard load (Welcome Dashboard ping query)
+
+### Identity Server Client Registration
+
+The `grafana-datasource` OAuth client must be registered in each tenant with the correct redirect URI:
+
+```
+http(s)://{grafana-host}/api/datasources/uid/octomesh-{tenantId}/resources/auth/callback
+```
+
+The datasource UID is deterministic (`octomesh-{tenantId}`), so the redirect URI can be registered before provisioning.
+
+## Known Limitations
+
+### 1. Page Reload Required After First Login
+
+When a user logs in for the first time, they land in the Main Organization (Org 1). The Welcome Dashboard triggers a background query that assigns them to all provisioned tenant organizations. However, **Grafana caches the organization list on page load**, so the org switcher only shows the new organizations after a browser reload (F5).
+
+**Root cause**: Grafana has no hook for plugins during the OAuth login flow. The plugin can only act when a datasource query is executed, which happens after the page has already rendered.
+
+**Possible solutions for future improvement**:
+- Build a Grafana **App Plugin** that runs on every page load and calls the user-to-org assignment API
+- Contribute a Grafana feature for dynamic `org_mapping` that maps OAuth claim values to org names automatically
+- Use a frontend redirect after the Welcome Dashboard detects new org membership
+
+### 2. Warning Icon on Welcome Dashboard
+
+The stat panel that triggers the ping query shows a small warning icon because the `__ping__` query returns no data. This is cosmetic and does not affect functionality.
+
+**Possible solutions**:
+- Build a custom Grafana panel plugin that executes the ping silently without rendering anything
+- Use Grafana's `annotations` or `dashboard variable` queries instead (if they trigger backend calls)
+
+### 3. Two-Step Authentication
+
+Users must authenticate twice:
+1. **Grafana Login** (via Identity Server OAuth) — for Grafana session
+2. **Datasource Authentication** (via plugin popup) — for tenant-specific API token
+
+This is by design: `TenantAuthorizationMiddleware` requires `tenant_id` to match exactly, so the Grafana login token (which has one `tenant_id`) cannot be used for all tenants.
+
+### 4. Identity Server URL Split (Browser vs Backend)
+
+The `identityServerUrl` is used for both browser-facing requests (authorize URL) and backend requests (token exchange). In Docker environments, the browser needs `localhost` but the plugin backend needs `host.docker.internal`. Currently solved with an `internalURL()` rewrite in the Go plugin. In production (Kubernetes), both resolve to the same hostname so this is not an issue.
+
+### 5. No Dynamic org_mapping in Grafana
+
+Grafana's `org_mapping` requires static configuration — there is no "map claim value to org with same name" wildcard. Organization membership is managed entirely by the plugin instead.
+
 ## Identity Server Reference
 
 The Identity Server's tenant-specific OAuth capability is documented in the identity server repository:
