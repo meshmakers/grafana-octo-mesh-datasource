@@ -46,5 +46,7 @@ services:
       # Make all OAuth users admins for dev
       GF_AUTH_GENERIC_OAUTH_ROLE_ATTRIBUTE_PATH: "'Admin'"
       GF_USERS_AUTO_ASSIGN_ORG_ROLE: "Admin"
+      # Do NOT sync org membership from OAuth — org assignment is managed by the plugin
+      GF_AUTH_GENERIC_OAUTH_SKIP_ORG_ROLE_SYNC: "true"
       # Skip TLS verification for all backend requests (dev only!)
       GF_DATAPROXY_TLS_INSECURE_SKIP_VERIFY: "true"

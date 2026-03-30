@@ -102,6 +102,11 @@ func (d *Datasource) QueryData(ctx context.Context, req *backend.QueryDataReques
 		userLogin = req.PluginContext.User.Login
 	}
 
+	// Ensure the user is a member of the tenant org (lazy assignment on first query)
+	if userLogin != "" && d.hasGrafanaAdminCredentials() {
+		d.addUserToTenantOrg("http://localhost:3000", userLogin)
+	}
+
 	for _, q := range req.Queries {
 		res := d.handleQuery(ctx, q, userLogin)
 		response.Responses[q.RefID] = res
@@ -257,10 +262,14 @@ func (d *Datasource) handleAuthStatus(w http.ResponseWriter, r *http.Request) {
 
 	hasToken := d.tokenManager.HasToken(userLogin, d.settings.TenantID)
 
-	// Check if Grafana org exists for this tenant
+	// Check if Grafana org exists for this tenant, and ensure user is a member
 	orgProvisioned := true
 	if d.hasGrafanaAdminCredentials() {
 		orgProvisioned = d.checkTenantOrgExists("http://localhost:3000")
+		if orgProvisioned {
+			// Ensure the current user is a member of the tenant org
+			d.addUserToTenantOrg("http://localhost:3000", userLogin)
+		}
 	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
