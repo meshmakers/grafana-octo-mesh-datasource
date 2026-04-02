@@ -30,13 +30,34 @@ import { buildQueryPayload } from './graphql/queryBuilder';
 import { convertUserFiltersToDto } from './utils/filterConverter';
 import { lastValueFrom } from 'rxjs';
 
+/**
+ * Auth status response from the Go backend's /auth/status endpoint
+ */
+interface AuthStatusResponse {
+  authenticated: boolean;
+  tenantId?: string;
+  userLogin?: string;
+  error?: string;
+}
+
+/**
+ * Auth start response from the Go backend's /auth/start endpoint
+ */
+interface AuthStartResponse {
+  authorizeUrl?: string;
+  error?: string;
+}
+
 export class DataSource extends DataSourceApi<OctoMeshQuery, OctoMeshDataSourceOptions> {
+  /** Resource endpoint base URL — routes through the Go backend plugin */
   baseUrl: string;
   tenantId?: string;
 
   constructor(instanceSettings: DataSourceInstanceSettings<OctoMeshDataSourceOptions>) {
     super(instanceSettings);
-    this.baseUrl = instanceSettings.url!;
+    // Use the plugin resource endpoint, not the datasource proxy.
+    // The Go backend plugin handles auth, token injection, and org management.
+    this.baseUrl = `/api/datasources/uid/${instanceSettings.uid}/resources`;
     this.tenantId = instanceSettings.jsonData.tenantId;
   }
 
@@ -102,17 +123,132 @@ export class DataSource extends DataSourceApi<OctoMeshQuery, OctoMeshDataSourceO
     return { data };
   }
 
+  // ─── Auth Flow Methods ───────────────────────────────────────────────
+
   /**
-   * Fetch list of available tenants from OctoMesh
+   * Check authentication status with the Go backend
+   */
+  async checkAuthStatus(): Promise<AuthStatusResponse> {
+    try {
+      const response = await lastValueFrom(
+        getBackendSrv().fetch<AuthStatusResponse>({
+          url: `${this.baseUrl}/auth/status`,
+          method: 'GET',
+        })
+      );
+      return response.data;
+    } catch {
+      return { authenticated: false, error: 'Failed to check auth status' };
+    }
+  }
+
+  /**
+   * Initiate the tenant-specific OAuth flow via a popup window.
+   * Returns a promise that resolves when authentication is complete.
+   */
+  async initiateAuth(): Promise<boolean> {
+    // Build the callback URL pointing to the plugin's resource endpoint
+    const callbackUrl = `${window.location.origin}${this.baseUrl}/auth/callback`;
+
+    // Get the authorize URL from the Go backend
+    const response = await lastValueFrom(
+      getBackendSrv().fetch<AuthStartResponse>({
+        url: `${this.baseUrl}/auth/start?callbackUrl=${encodeURIComponent(callbackUrl)}`,
+        method: 'GET',
+      })
+    );
+
+    const authorizeUrl = response.data.authorizeUrl;
+    if (!authorizeUrl) {
+      throw new Error(response.data.error ?? 'Failed to get authorize URL');
+    }
+
+    // Open popup for OAuth flow
+    return new Promise<boolean>((resolve, reject) => {
+      const width = 600;
+      const height = 700;
+      const left = window.screenX + (window.outerWidth - width) / 2;
+      const top = window.screenY + (window.outerHeight - height) / 2;
+
+      const popup = window.open(
+        authorizeUrl,
+        'octo-mesh-auth',
+        `width=${width},height=${height},left=${left},top=${top},menubar=no,toolbar=no,status=no`
+      );
+
+      if (!popup) {
+        reject(new Error('Popup blocked. Please allow popups for this site.'));
+        return;
+      }
+
+      // Listen for postMessage from the callback page
+      const messageHandler = (event: MessageEvent) => {
+        if (event.data?.type === 'octo-mesh-auth-callback') {
+          window.removeEventListener('message', messageHandler);
+          clearInterval(pollTimer);
+          resolve(event.data.success === true);
+        }
+      };
+      window.addEventListener('message', messageHandler);
+
+      // Poll for popup close (in case postMessage doesn't fire)
+      const pollTimer = setInterval(() => {
+        if (popup.closed) {
+          clearInterval(pollTimer);
+          window.removeEventListener('message', messageHandler);
+          // Check auth status after popup closed
+          this.checkAuthStatus().then((status) => {
+            resolve(status.authenticated);
+          });
+        }
+      }, 500);
+
+      // Timeout after 5 minutes
+      setTimeout(() => {
+        clearInterval(pollTimer);
+        window.removeEventListener('message', messageHandler);
+        if (!popup.closed) {
+          popup.close();
+        }
+        reject(new Error('Authentication timed out'));
+      }, 5 * 60 * 1000);
+    });
+  }
+
+  // ─── Data Fetching Methods ───────────────────────────────────────────
+
+  // ─── Data Fetching Methods (routed through Go backend) ────────────
+
+  /**
+   * Fetch list of available tenants from OctoMesh via backend proxy
    */
   async fetchTenants(): Promise<TenantDto[]> {
     const response = await lastValueFrom(
       getBackendSrv().fetch<TenantsResponse>({
-        url: `${this.baseUrl}/system/v1/tenants`,
+        url: `${this.baseUrl}/tenants`,
         method: 'GET',
       })
     );
     return response.data.list ?? [];
+  }
+
+  /**
+   * Perform a GraphQL request via the Go backend proxy.
+   * The backend injects the tenant-specific OAuth token.
+   */
+  private async graphqlRequest<T>(payload: { query: string; variables?: object }): Promise<T> {
+    if (!this.tenantId) {
+      throw new Error('Tenant ID is not configured.');
+    }
+
+    const response = await lastValueFrom(
+      getBackendSrv().fetch<T>({
+        url: `${this.baseUrl}/graphql`,
+        method: 'POST',
+        data: payload,
+      })
+    );
+    return response.data;
   }
 
   /**
@@ -138,15 +274,8 @@ export class DataSource extends DataSourceApi<OctoMeshQuery, OctoMeshDataSourceO
       }
     }`;
 
-    const response = await lastValueFrom(
-      getBackendSrv().fetch<SystemQueryResponse>({
-        url: `${this.baseUrl}/tenants/${this.tenantId}/graphql`,
-        method: 'POST',
-        data: { query },
-      })
-    );
-
-    return response.data.data?.runtime?.systemPersistentQuery?.items ?? [];
+    const response = await this.graphqlRequest<SystemQueryResponse>({ query });
+    return response.data?.runtime?.systemPersistentQuery?.items ?? [];
   }
 
   /**
@@ -171,22 +300,12 @@ export class DataSource extends DataSourceApi<OctoMeshQuery, OctoMeshDataSourceO
       }
     }`;
 
-    const response = await lastValueFrom(
-      getBackendSrv().fetch<QueryColumnsResponse>({
-        url: `${this.baseUrl}/tenants/${this.tenantId}/graphql`,
-        method: 'POST',
-        data: { query, variables: { rtId: queryRtId } },
-      })
-    );
-
-    return response.data.data?.runtime?.runtimeQuery?.items?.[0]?.columns ?? [];
+    const response = await this.graphqlRequest<QueryColumnsResponse>({ query, variables: { rtId: queryRtId } });
+    return response.data?.runtime?.runtimeQuery?.items?.[0]?.columns ?? [];
   }
 
   /**
    * Fetch available attributes for a CK type (for filter dropdowns)
-   *
-   * Uses the Construction Kit schema to get source entity attributes,
-   * which are needed for filtering before aggregation.
    */
   async fetchTypeAttributes(rtCkTypeId: string): Promise<CkTypeAttributeDto[]> {
     if (!this.tenantId) {
@@ -208,40 +327,12 @@ export class DataSource extends DataSourceApi<OctoMeshQuery, OctoMeshDataSourceO
       }
     }`;
 
-    const response = await lastValueFrom(
-      getBackendSrv().fetch<CkTypeAttributesResponse>({
-        url: `${this.baseUrl}/tenants/${this.tenantId}/graphql`,
-        method: 'POST',
-        data: { query, variables: { rtCkId: rtCkTypeId } },
-      })
-    );
-
-    return response.data.data?.constructionKit?.types?.items?.[0]?.availableQueryColumns?.items ?? [];
-  }
-
-  /**
-   * Helper to perform GraphQL requests
-   */
-  private async doRequest<T>(query: { query: string; variables: object }, tenantId?: string): Promise<T> {
-    if (!tenantId) {
-      throw new Error('Tenant ID is not configured.');
-    }
-
-    const response = await lastValueFrom(
-      getBackendSrv().fetch<T>({
-        url: `${this.baseUrl}/tenants/${tenantId}/graphql`,
-        method: 'POST',
-        data: query,
-      })
-    );
-    return response.data;
+    const response = await this.graphqlRequest<CkTypeAttributesResponse>({ query, variables: { rtCkId: rtCkTypeId } });
+    return response.data?.constructionKit?.types?.items?.[0]?.availableQueryColumns?.items ?? [];
   }
 
   /**
    * Execute a RuntimeQuery and return columns + rows
-   *
-   * Uses the query builder to construct the appropriate GraphQL query
-   * based on the query type (Simple, Aggregation, or GroupedAggregation).
    */
   async executeQuery(
     rtId: string,
@@ -250,7 +341,7 @@ export class DataSource extends DataSourceApi<OctoMeshQuery, OctoMeshDataSourceO
     fieldFilter?: FieldFilterDto[]
   ): Promise<{ columns: QueryColumnDto[]; rows: QueryRowDto[]; totalCount: number }> {
     const payload = buildQueryPayload(queryType, rtId, maxRows, fieldFilter);
-    const response = await this.doRequest<RuntimeQueryResponse>(payload, this.tenantId);
+    const response = await this.graphqlRequest<RuntimeQueryResponse>(payload);
 
     const result = response.data?.runtime?.runtimeQuery?.items?.[0];
     return {
@@ -282,8 +373,6 @@ export class DataSource extends DataSourceApi<OctoMeshQuery, OctoMeshDataSourceO
 
   /**
    * Map OctoMesh attribute type to Grafana FieldType
-   * Uses case-insensitive comparison since backend returns UPPERCASE types
-   * (e.g., "INTEGER", "DOUBLE") for aggregation queries
    */
   private mapAttributeType(octoType: string): FieldType {
     const lower = octoType.toLowerCase();
@@ -317,7 +406,7 @@ export class DataSource extends DataSourceApi<OctoMeshQuery, OctoMeshDataSourceO
   }
 
   /**
-   * Tests connectivity by fetching the tenant list and validating configuration
+   * Tests connectivity by fetching the tenant list via the backend proxy
    */
   async testDatasource() {
     try {

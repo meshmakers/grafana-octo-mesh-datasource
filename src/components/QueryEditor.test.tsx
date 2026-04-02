@@ -37,6 +37,8 @@ describe('QueryEditor', () => {
             tenantId: 'test-tenant',
             fetchSystemQueries: jest.fn().mockResolvedValue(mockQueries),
             fetchQueryColumns: jest.fn().mockResolvedValue(mockColumns),
+            checkAuthStatus: jest.fn().mockResolvedValue({ authenticated: true }),
+            initiateAuth: jest.fn().mockResolvedValue(true),
         };
     });
 

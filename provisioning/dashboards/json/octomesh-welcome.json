@@ -1,0 +1,67 @@
+{
+  "uid": "octomesh-welcome",
+  "title": "OctoMesh - Welcome",
+  "tags": ["octomesh"],
+  "timezone": "browser",
+  "editable": false,
+  "hideControls": true,
+  "panels": [
+    {
+      "id": 1,
+      "type": "text",
+      "title": "",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 0 },
+      "options": {
+        "mode": "markdown",
+        "content": "# Welcome to OctoMesh Dashboards\n\nUse the **organization switcher** in the top-left corner to switch to your tenant dashboard.\n\nIf you don't see your tenant listed yet, **please reload the page** (F5). It may take one or two reloads until your tenant organizations appear in the switcher.\n\nIf your tenant still doesn't appear after reloading, please contact your administrator to provision it."
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "",
+      "gridPos": { "h": 1, "w": 1, "x": 0, "y": 10 },
+      "transparent": true,
+      "datasource": {
+        "type": "grafana-octo-mesh-datasource",
+        "uid": "${DS_OCTOMESH}"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "queryRtId": "__ping__",
+          "datasource": {
+            "type": "grafana-octo-mesh-datasource",
+            "uid": "${DS_OCTOMESH}"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "noValue": " "
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "values": false, "calcs": ["count"], "fields": "" },
+        "textMode": "none",
+        "colorMode": "none",
+        "graphMode": "none"
+      }
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "DS_OCTOMESH",
+        "type": "datasource",
+        "query": "grafana-octo-mesh-datasource",
+        "current": {},
+        "hide": 2
+      }
+    ]
+  },
+  "time": { "from": "now-6h", "to": "now" },
+  "version": 3,
+  "schemaVersion": 39
+}

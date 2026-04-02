@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "scripts": {
     "build": "webpack -c ./.config/webpack/webpack.config.ts --env production",
-    "dev": "webpack -w -c ./.config/webpack/webpack.config.ts --env development",
+    "build:backend": "go build -o dist/gpx_grafana-octo-mesh-datasource_$(go env GOOS)_$(go env GOARCH) ./pkg",
+    "build:all": "npm run build:backend && npm run build",
+    "dev": "npm run build:backend && webpack -w -c ./.config/webpack/webpack.config.ts --env development",
     "test": "jest --watch --onlyChanged",
     "test:ci": "jest --passWithNoTests --maxWorkers 4",
     "typecheck": "tsc --noEmit",

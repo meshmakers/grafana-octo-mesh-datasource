@@ -73,19 +73,18 @@ export const DEFAULT_QUERY: Partial<OctoMeshQuery> = {
 /**
  * Datasource configuration options (stored in jsonData)
  *
- * Note: oauthPassThru is a standard Grafana field that should be in DataSourceJsonData
- * but isn't. We declare it here to document our usage. When true, Grafana forwards
- * the logged-in user's OAuth token to our backend via the proxy.
+ * The Go backend handles tenant-specific OAuth via acr_values.
+ * No oauthPassThru needed — the backend manages tokens per user/tenant.
  */
 export interface OctoMeshDataSourceOptions extends DataSourceJsonData {
   /** Selected tenant ID */
   tenantId?: string;
-  /**
-   * Forward the user's OAuth token to OctoMesh.
-   * Standard Grafana field, missing from DataSourceJsonData types.
-   * @see https://grafana.com/developers/plugin-tools/how-to-guides/data-source-plugins/add-authentication-for-data-source-plugins
-   */
-  oauthPassThru?: boolean;
+  /** OctoMesh Identity Server URL (e.g., https://connect.example.com) */
+  identityServerUrl?: string;
+  /** OAuth client ID for tenant-specific authentication (e.g., grafana-datasource) */
+  oauthClientId?: string;
+  /** OAuth scopes (space-separated) */
+  oauthScopes?: string;
   /**
    * Skip TLS certificate verification.
    * WARNING: Insecure, use only for development/testing environments.
@@ -97,7 +96,10 @@ export interface OctoMeshDataSourceOptions extends DataSourceJsonData {
  * Secure configuration (stored encrypted, backend only)
  */
 export interface OctoMeshSecureJsonData {
-  // Reserved for future use (e.g., API keys if not using OAuth)
+  /** Grafana admin username for org management (Server Admin API requires Basic Auth) */
+  grafanaAdminUser?: string;
+  /** Grafana admin password for org management */
+  grafanaAdminPassword?: string;
 }
 
 /**

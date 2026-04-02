@@ -1,0 +1,23 @@
+$schema: https://schemas.meshmakers.cloud/runtime-model.schema.json
+# GrafanaConfiguration entity - create this in the system tenant.
+# The pipelines reference this by name "GrafanaServer".
+# Adjust the attribute values for your environment before importing.
+dependencies: []
+entities:
+- rtId: 67e6a00000000000c0000001
+  ckTypeId: System.Communication/GrafanaConfiguration
+  rtWellKnownName: GrafanaServer
+  associations: []
+  attributes:
+  - id: System.Communication/GrafanaUrl
+    value: http://grafana.grafana.svc.cluster.local:80
+  - id: System.Communication/AdminUser
+    value: admin
+  - id: System.Communication/AdminPassword
+    value: CHANGE_ME
+  - id: System.Communication/OctoMeshUrl
+    value: http://octo-mesh-asset-rep-services.octo.svc.cluster.local
+  - id: System.Communication/IdentityServerUrl
+    value: https://connect.test-2.mm.cloud
+  - id: System.Communication/OAuthClientId
+    value: grafana-datasource

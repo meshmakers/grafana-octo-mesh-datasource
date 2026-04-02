@@ -1,0 +1,22 @@
+$schema: https://schemas.meshmakers.cloud/runtime-model.schema.json
+# GrafanaConfiguration for local development.
+# Import into the system tenant or the tenant where pipelines run.
+dependencies: []
+entities:
+- rtId: 67e6a00000000000c0000001
+  ckTypeId: System.Communication/GrafanaConfiguration
+  rtWellKnownName: GrafanaServer
+  associations: []
+  attributes:
+  - id: System.Communication/GrafanaUrl
+    value: http://localhost:3000
+  - id: System.Communication/AdminUser
+    value: admin
+  - id: System.Communication/AdminPassword
+    value: admin
+  - id: System.Communication/OctoMeshUrl
+    value: https://localhost:5001
+  - id: System.Communication/IdentityServerUrl
+    value: https://localhost:5003
+  - id: System.Communication/OAuthClientId
+    value: grafana-datasource

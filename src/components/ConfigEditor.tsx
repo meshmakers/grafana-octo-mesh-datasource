@@ -1,5 +1,5 @@
 import React, { ChangeEvent, useRef, useEffect } from 'react';
-import { FieldSet, InlineField, Input, Stack, Switch, Tooltip, Icon, useStyles2 } from '@grafana/ui';
+import { FieldSet, InlineField, Input, SecretInput, Stack, Switch, Tooltip, Icon, useStyles2 } from '@grafana/ui';
 import { css } from '@emotion/css';
 import { DataSourcePluginOptionsEditorProps, GrafanaTheme2 } from '@grafana/data';
 import { OctoMeshDataSourceOptions, OctoMeshSecureJsonData } from '../types';
@@ -28,20 +28,11 @@ export function ConfigEditor(props: Props) {
   }, [options.version, options.url]);
 
   const onUrlChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const newUrl = event.target.value;
     onOptionsChange({
       ...options,
-      // Set root-level url for Grafana proxy routing
-      url: newUrl,
+      url: event.target.value,
       jsonData: {
         ...jsonData,
-        // Reset tenant when URL changes?
-        // Maybe better to keep it so user doesn't have to re-type if they just fixed a typo in URL
-        // tenantId: undefined, 
-
-        // Forward user's OAuth token to OctoMesh
-        oauthPassThru: true,
-        // Preserve existing tlsSkipVerify setting (default: false for security)
         tlsSkipVerify: jsonData.tlsSkipVerify ?? false,
       },
     });
@@ -57,6 +48,36 @@ export function ConfigEditor(props: Props) {
     });
   };
 
+  const onIdentityServerUrlChange = (event: ChangeEvent<HTMLInputElement>) => {
+    onOptionsChange({
+      ...options,
+      jsonData: {
+        ...jsonData,
+        identityServerUrl: event.target.value,
+      },
+    });
+  };
+
+  const onOAuthClientIdChange = (event: ChangeEvent<HTMLInputElement>) => {
+    onOptionsChange({
+      ...options,
+      jsonData: {
+        ...jsonData,
+        oauthClientId: event.target.value,
+      },
+    });
+  };
+
+  const onOAuthScopesChange = (event: ChangeEvent<HTMLInputElement>) => {
+    onOptionsChange({
+      ...options,
+      jsonData: {
+        ...jsonData,
+        oauthScopes: event.target.value,
+      },
+    });
+  };
+
   const onTlsSkipVerifyChange = (event: ChangeEvent<HTMLInputElement>) => {
     onOptionsChange({
       ...options,
@@ -64,6 +85,42 @@ export function ConfigEditor(props: Props) {
         ...jsonData,
         tlsSkipVerify: event.target.checked,
       },
+    });
+  };
+
+  const onGrafanaAdminUserChange = (value: string) => {
+    onOptionsChange({
+      ...options,
+      secureJsonData: {
+        ...options.secureJsonData,
+        grafanaAdminUser: value,
+      },
+    });
+  };
+
+  const onGrafanaAdminUserReset = () => {
+    onOptionsChange({
+      ...options,
+      secureJsonFields: { ...options.secureJsonFields, grafanaAdminUser: false },
+      secureJsonData: { ...options.secureJsonData, grafanaAdminUser: '' },
+    });
+  };
+
+  const onGrafanaAdminPasswordChange = (value: string) => {
+    onOptionsChange({
+      ...options,
+      secureJsonData: {
+        ...options.secureJsonData,
+        grafanaAdminPassword: value,
+      },
+    });
+  };
+
+  const onGrafanaAdminPasswordReset = () => {
+    onOptionsChange({
+      ...options,
+      secureJsonFields: { ...options.secureJsonFields, grafanaAdminPassword: false },
+      secureJsonData: { ...options.secureJsonData, grafanaAdminPassword: '' },
     });
   };
 
@@ -104,7 +161,86 @@ export function ConfigEditor(props: Props) {
             id="config-editor-tenant"
             value={jsonData.tenantId ?? ''}
             onChange={onTenantIdChange}
-            placeholder="e.g. tenant-123"
+            placeholder="e.g. meshtest"
+            width={40}
+          />
+        </InlineField>
+      </FieldSet>
+
+      <FieldSet label="Authentication">
+        <InlineField
+          label="Identity Server URL"
+          labelWidth={20}
+          tooltip="URL of the OctoMesh Identity Server (e.g., https://connect.example.com)"
+        >
+          <Input
+            id="config-editor-identity-server-url"
+            value={jsonData.identityServerUrl ?? ''}
+            onChange={onIdentityServerUrlChange}
+            placeholder="https://connect.example.com"
+            width={60}
+          />
+        </InlineField>
+
+        <InlineField
+          label="Client ID"
+          labelWidth={20}
+          tooltip="OAuth client ID for tenant-specific authentication"
+        >
+          <Input
+            id="config-editor-oauth-client-id"
+            value={jsonData.oauthClientId ?? ''}
+            onChange={onOAuthClientIdChange}
+            placeholder="e.g. grafana-datasource"
+            width={40}
+          />
+        </InlineField>
+
+        <InlineField
+          label="Scopes"
+          labelWidth={20}
+          tooltip="OAuth scopes (space-separated)"
+        >
+          <Input
+            id="config-editor-oauth-scopes"
+            value={jsonData.oauthScopes ?? 'openid profile email octo_api offline_access'}
+            onChange={onOAuthScopesChange}
+            placeholder="openid profile email octo_api offline_access"
+            width={60}
+          />
+        </InlineField>
+
+      </FieldSet>
+
+      <FieldSet label="Organization Management (optional)">
+        <InlineField
+          label="Grafana Admin User"
+          labelWidth={20}
+          tooltip="Grafana Server Admin username. Required for auto-creating organizations per tenant."
+        >
+          <SecretInput
+            id="config-editor-grafana-admin-user"
+            isConfigured={!!options.secureJsonFields?.grafanaAdminUser}
+            value={options.secureJsonData?.grafanaAdminUser ?? ''}
+            onChange={(e) => onGrafanaAdminUserChange(e.currentTarget.value)}
+            onReset={onGrafanaAdminUserReset}
+            placeholder="admin"
+            width={40}
+          />
+        </InlineField>
+
+        <InlineField
+          label="Grafana Admin Password"
+          labelWidth={20}
+          tooltip="Grafana Server Admin password."
+        >
+          <SecretInput
+            id="config-editor-grafana-admin-password"
+            isConfigured={!!options.secureJsonFields?.grafanaAdminPassword}
+            value={options.secureJsonData?.grafanaAdminPassword ?? ''}
+            onChange={(e) => onGrafanaAdminPasswordChange(e.currentTarget.value)}
+            onReset={onGrafanaAdminPasswordReset}
+            placeholder="password"
             width={40}
           />
         </InlineField>

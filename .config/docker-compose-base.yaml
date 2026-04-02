@@ -24,11 +24,13 @@ services:
       GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS: grafana-octo-mesh-datasource
       # Disable anonymous auth when using OAuth
       GF_AUTH_ANONYMOUS_ENABLED: "false"
+      # Enable basic auth for Server Admin API (required for org management)
+      GF_AUTH_BASIC_ENABLED: "true"
       # OAuth configuration for OctoMesh Identity
       GF_AUTH_GENERIC_OAUTH_ENABLED: "true"
       GF_AUTH_GENERIC_OAUTH_NAME: "OctoMesh"
       GF_AUTH_GENERIC_OAUTH_CLIENT_ID: "grafana-test"
-      GF_AUTH_GENERIC_OAUTH_SCOPES: "openid profile email assetTenantAPI.full_access assetSystemAPI.full_access"
+      GF_AUTH_GENERIC_OAUTH_SCOPES: "openid profile email role allowed_tenants octo_api"
       # Auth URL is accessed by browser (use localhost)
       GF_AUTH_GENERIC_OAUTH_AUTH_URL: "https://localhost:5003/connect/authorize"
       # Token URL is accessed by Grafana server (use docker internal)
@@ -41,8 +43,15 @@ services:
       # Required for OAuth token to be passed to datasources
       GF_AUTH_GENERIC_OAUTH_ALLOW_ASSIGN_GRAFANA_ADMIN: "true"
       GF_AUTH_OAUTH_ALLOW_INSECURE_EMAIL_LOOKUP: "true"
-      # Make all OAuth users admins for dev
-      GF_AUTH_GENERIC_OAUTH_ROLE_ATTRIBUTE_PATH: "'Admin'"
-      GF_USERS_AUTO_ASSIGN_ORG_ROLE: "Admin"
+      # Skip Grafana login page — go directly to OctoMesh OAuth
+      GF_AUTH_GENERIC_OAUTH_AUTO_LOGIN: "true"
+      # Map OctoMesh roles to Grafana roles
+      GF_AUTH_GENERIC_OAUTH_ROLE_ATTRIBUTE_PATH: "contains(role[*], 'DashboardManagement') && 'Admin' || contains(role[*], 'DashboardViewer') && 'Viewer'"
+      GF_AUTH_GENERIC_OAUTH_ROLE_ATTRIBUTE_STRICT: "true"
+      GF_USERS_AUTO_ASSIGN_ORG_ROLE: "Viewer"
+      # Do NOT sync org membership from OAuth — org assignment is managed by the plugin
+      GF_AUTH_GENERIC_OAUTH_SKIP_ORG_ROLE_SYNC: "true"
+      # Set the OctoMesh welcome dashboard as home for Org 1
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: "/etc/grafana/provisioning/dashboards/json/octomesh-welcome.json"
       # Skip TLS verification for all backend requests (dev only!)
       GF_DATAPROXY_TLS_INSECURE_SKIP_VERIFY: "true"
