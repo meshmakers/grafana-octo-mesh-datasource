@@ -48,3 +48,6 @@ ci/
 # Go
 vendor/
 .DS_Store
+
+# Serena
+.serena/
