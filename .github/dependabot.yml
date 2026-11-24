@@ -1,0 +1,76 @@
+# Dependabot standard configuration.
+# One entry per ecosystem and manifest directory, minor/patch updates grouped, an explicit
+# open-pull-requests-limit, and the majors we hold on purpose ignored (remove an ignore only
+# together with the story that delivers that migration).
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    groups:
+      angular:
+        patterns: ["@angular/*", "@angular-devkit/*", "@schematics/*", "ng-packagr", "zone.js", "typescript", "angular-eslint*"]
+      kendo:
+        patterns: ["@progress/*"]
+        update-types: ["minor", "patch"]
+      test-tooling:
+        patterns: ["karma*", "jasmine*", "@types/jasmine", "jest*", "@types/jest", "vitest", "@vitest/*"]
+        update-types: ["minor", "patch"]
+      npm-minor-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+    ignore:
+      # Kendo majors follow a licensed upgrade
+      - dependency-name: "@progress/*"
+        update-types: ["version-update:semver-major"]
+      # stay on graphql 16.x
+      - dependency-name: "graphql"
+        update-types: ["version-update:semver-major"]
+      # TypeScript 7 is held on purpose
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+      # Angular majors are planned migrations
+      - dependency-name: "@angular/*"
+        update-types: ["version-update:semver-major"]
+      # Angular majors are planned migrations
+      - dependency-name: "@angular-devkit/*"
+        update-types: ["version-update:semver-major"]
+      # Angular majors are planned migrations
+      - dependency-name: "@schematics/*"
+        update-types: ["version-update:semver-major"]
+      # follows the Angular major
+      - dependency-name: "ng-packagr"
+        update-types: ["version-update:semver-major"]
+      # follows the Angular major
+      - dependency-name: "angular-eslint*"
+        update-types: ["version-update:semver-major"]
+  - package-ecosystem: "docker"
+    directories:
+      - "/.config"
+      - "/devops-build"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3
+    groups:
+      docker-minor-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+    ignore:
+      # a new .NET major is a platform decision, not a Dependabot bump
+      - dependency-name: "mcr.microsoft.com/dotnet/*"
+        update-types: ["version-update:semver-major"]
+      # same images, Dependabot may name them without the registry host
+      - dependency-name: "dotnet/*"
+        update-types: ["version-update:semver-major"]
+      # Node majors are planned
+      - dependency-name: "node"
+        update-types: ["version-update:semver-major"]
+      # nginx majors are planned
+      - dependency-name: "nginx"
+        update-types: ["version-update:semver-major"]
+      # internal images: legacy date-based tags sort above semver, our pipelines manage them
+      - dependency-name: "meshmakers/*"
