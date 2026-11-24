@@ -4,7 +4,7 @@
 ARG VERSION=1.0.0
 
 # ─── Go backend build stage ─────────────────────────────────────────
-FROM golang:1.25-alpine AS go-build
+FROM golang:1.27-alpine AS go-build
 
 WORKDIR /app
 
