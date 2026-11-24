@@ -89,10 +89,15 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
     if (!queryRtId) {
       return;
     }
+    // A response that arrives after the selection changed must not overwrite the newer result.
+    let active = true;
     datasource
       .fetchQueryColumns(queryRtId)
-      .then((items) => setLoadedColumns({ forId: queryRtId, items }))
-      .catch(() => setLoadedColumns({ forId: queryRtId, items: [] }));
+      .then((items) => active && setLoadedColumns({ forId: queryRtId, items }))
+      .catch(() => active && setLoadedColumns({ forId: queryRtId, items: [] }));
+    return () => {
+      active = false;
+    };
   }, [query.queryRtId, datasource]);
 
   // Load source attributes when querySourceTypeId changes (for filter dropdowns)
@@ -101,10 +106,14 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
     if (!sourceTypeId) {
       return;
     }
+    let active = true;
     datasource
       .fetchTypeAttributes(sourceTypeId)
-      .then((items) => setLoadedSourceAttributes({ forId: sourceTypeId, items }))
-      .catch(() => setLoadedSourceAttributes({ forId: sourceTypeId, items: [] }));
+      .then((items) => active && setLoadedSourceAttributes({ forId: sourceTypeId, items }))
+      .catch(() => active && setLoadedSourceAttributes({ forId: sourceTypeId, items: [] }));
+    return () => {
+      active = false;
+    };
   }, [query.querySourceTypeId, datasource]);
 
   // Only results loaded for the currently selected ids count; anything else is empty or still loading.
