@@ -42,6 +42,7 @@ jest.mock('@grafana/runtime', () => ({
 
 describe('DataSource', () => {
     const instanceSettings = {
+        uid: 'octo-test-uid',
         url: 'http://localhost:3000',
         jsonData: {
             tenantId: 'test-tenant',
@@ -80,7 +81,7 @@ describe('DataSource', () => {
             expect(fetchMock).toHaveBeenCalledTimes(1);
             const callArg = fetchMock.mock.calls[0][0];
 
-            expect(callArg.url).toBe('http://localhost:3000/graphql');
+            expect(callArg.url).toBe('/api/datasources/uid/octo-test-uid/resources/graphql');
             expect(callArg.data.variables.fieldFilter).toBeDefined();
             expect(callArg.data.variables.fieldFilter).toHaveLength(2);
 
@@ -204,7 +205,7 @@ describe('DataSource', () => {
             expect(fetchMock).toHaveBeenCalledTimes(1);
             const callArg = fetchMock.mock.calls[0][0];
 
-            expect(callArg.url).toBe('http://localhost:3000/graphql');
+            expect(callArg.url).toBe('/api/datasources/uid/octo-test-uid/resources/graphql');
             expect(callArg.data.variables.rtCkId).toBe('Industry.Basic/Alarm');
             expect(result).toHaveLength(3);
             expect(result[0]).toEqual({ attributePath: 'name', attributeValueType: 'String' });

@@ -89,7 +89,67 @@ describe('QueryEditor', () => {
         // to ONLY return wrong-cased items and see if the user can select them? 
         // No, that's manual.
 
-        // Let's rely on the assumption that if 'updatedAt' (lowercase d) is not supported, 
+        // Let's rely on the assumption that if 'updatedAt' (lowercase d) is not supported,
         // we should update the code to support it.
+    });
+
+    const renderWith = (queryRtId?: string) => {
+        const props = {
+            datasource: ds,
+            query: { refId: 'A', queryRtId } as OctoMeshQuery,
+            onRunQuery,
+            onChange,
+        };
+        const result = render(<QueryEditor {...props} />);
+        const rerenderWith = (nextRtId?: string) =>
+            result.rerender(<QueryEditor {...props} query={{ refId: 'A', queryRtId: nextRtId } as OctoMeshQuery} />);
+        return { ...result, rerenderWith };
+    };
+
+    it('shows the loading indicator until the columns of the selected query arrive', async () => {
+        let resolveColumns: (columns: QueryColumnDto[]) => void = () => undefined;
+        ds.fetchQueryColumns = jest.fn(
+            () => new Promise<QueryColumnDto[]>((resolve) => {
+                resolveColumns = resolve;
+            })
+        );
+
+        renderWith('q1');
+
+        expect(await screen.findByText('Loading columns...')).toBeInTheDocument();
+        resolveColumns(mockColumns);
+        expect(await screen.findByText('Columns (5)')).toBeInTheDocument();
+        expect(screen.queryByText('Loading columns...')).not.toBeInTheDocument();
+    });
+
+    it('clears the columns when the query is deselected, without fetching again', async () => {
+        const { rerenderWith } = renderWith('q1');
+        expect(await screen.findByText('Columns (5)')).toBeInTheDocument();
+
+        rerenderWith(undefined);
+
+        expect(screen.queryByText(/^Columns \(/)).not.toBeInTheDocument();
+        expect(screen.queryByText('Loading columns...')).not.toBeInTheDocument();
+        expect(ds.fetchQueryColumns).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not show the columns of the previous query while the next one loads', async () => {
+        const { rerenderWith } = renderWith('q1');
+        expect(await screen.findByText('Columns (5)')).toBeInTheDocument();
+
+        let resolveNext: (columns: QueryColumnDto[]) => void = () => undefined;
+        ds.fetchQueryColumns.mockImplementationOnce(
+            () => new Promise<QueryColumnDto[]>((resolve) => {
+                resolveNext = resolve;
+            })
+        );
+        rerenderWith('q2');
+
+        expect(await screen.findByText('Loading columns...')).toBeInTheDocument();
+        expect(screen.queryByText('Columns (5)')).not.toBeInTheDocument();
+
+        resolveNext([{ attributePath: 'only', attributeValueType: 'String' }]);
+        expect(await screen.findByText('Columns (1)')).toBeInTheDocument();
+        expect(ds.fetchQueryColumns).toHaveBeenLastCalledWith('q2');
     });
 });
