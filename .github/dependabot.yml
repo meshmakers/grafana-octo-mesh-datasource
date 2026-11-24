@@ -12,7 +12,7 @@ updates:
     open-pull-requests-limit: 5
     groups:
       angular:
-        patterns: ["@angular/*", "@angular-devkit/*", "@schematics/*", "ng-packagr", "zone.js", "typescript", "angular-eslint*"]
+        patterns: ["@angular/*", "@angular-devkit/*", "@schematics/*", "ng-packagr", "zone.js", "typescript", "angular-eslint*", "@angular-eslint/*"]
       kendo:
         patterns: ["@progress/*"]
         update-types: ["minor", "patch"]
@@ -47,6 +47,22 @@ updates:
       # follows the Angular major
       - dependency-name: "angular-eslint*"
         update-types: ["version-update:semver-major"]
+      # follows the Angular major
+      - dependency-name: "@angular-eslint/*"
+        update-types: ["version-update:semver-major"]
+      # follows the Angular major
+      - dependency-name: "zone.js"
+        update-types: ["version-update:semver-major"]
+  - package-ecosystem: "gomod"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    groups:
+      gomod-minor-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
   - package-ecosystem: "docker"
     directories:
       - "/.config"
