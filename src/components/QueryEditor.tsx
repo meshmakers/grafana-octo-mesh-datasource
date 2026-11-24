@@ -1,7 +1,6 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import { Alert, Badge, Button, Combobox, FieldSet, InlineField, Input, Stack } from '@grafana/ui';
+import { Alert, Badge, Button, Combobox, ComboboxOption, FieldSet, InlineField, Input, Stack } from '@grafana/ui';
 import { QueryEditorProps } from '@grafana/data';
-import { ComboboxOption } from '@grafana/ui/dist/types/components/Combobox/types';
 import { DataSource } from '../datasource';
 import { OctoMeshDataSourceOptions, OctoMeshQuery, SystemQueryDto, QueryColumnDto, UserFieldFilter, CkTypeAttributeDto } from '../types';
 import { QueryType, getQueryType, getQueryTypeLabel } from '../queryTypes';
@@ -26,11 +25,13 @@ function getQueryTypeBadgeColor(queryType: QueryType): 'blue' | 'green' | 'purpl
 
 export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) {
   const [systemQueries, setSystemQueries] = useState<SystemQueryDto[]>([]);
-  const [columns, setColumns] = useState<QueryColumnDto[]>([]);
-  const [sourceAttributes, setSourceAttributes] = useState<CkTypeAttributeDto[]>([]);
+  // Each result remembers the id it was loaded for, so loading state and stale results are derived below
+  // instead of being reset synchronously inside the effects (react-hooks/set-state-in-effect).
+  const [loadedColumns, setLoadedColumns] = useState<{ forId?: string; items: QueryColumnDto[] }>({ items: [] });
+  const [loadedSourceAttributes, setLoadedSourceAttributes] = useState<{ forId?: string; items: CkTypeAttributeDto[] }>({
+    items: [],
+  });
   const [loading, setLoading] = useState(false);
-  const [columnsLoading, setColumnsLoading] = useState(false);
-  const [attributesLoading, setAttributesLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [authStatus, setAuthStatus] = useState<{ checked: boolean; authenticated: boolean }>({
     checked: false,
@@ -84,31 +85,42 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
 
   // Load columns when query changes (for result preview)
   useEffect(() => {
-    if (!query.queryRtId) {
-      setColumns([]);
+    const queryRtId = query.queryRtId;
+    if (!queryRtId) {
       return;
     }
-    setColumnsLoading(true);
+    // A response that arrives after the selection changed must not overwrite the newer result.
+    let active = true;
     datasource
-      .fetchQueryColumns(query.queryRtId)
-      .then(setColumns)
-      .catch(() => setColumns([]))
-      .finally(() => setColumnsLoading(false));
+      .fetchQueryColumns(queryRtId)
+      .then((items) => active && setLoadedColumns({ forId: queryRtId, items }))
+      .catch(() => active && setLoadedColumns({ forId: queryRtId, items: [] }));
+    return () => {
+      active = false;
+    };
   }, [query.queryRtId, datasource]);
 
   // Load source attributes when querySourceTypeId changes (for filter dropdowns)
   useEffect(() => {
-    if (!query.querySourceTypeId) {
-      setSourceAttributes([]);
+    const sourceTypeId = query.querySourceTypeId;
+    if (!sourceTypeId) {
       return;
     }
-    setAttributesLoading(true);
+    let active = true;
     datasource
-      .fetchTypeAttributes(query.querySourceTypeId)
-      .then(setSourceAttributes)
-      .catch(() => setSourceAttributes([]))
-      .finally(() => setAttributesLoading(false));
+      .fetchTypeAttributes(sourceTypeId)
+      .then((items) => active && setLoadedSourceAttributes({ forId: sourceTypeId, items }))
+      .catch(() => active && setLoadedSourceAttributes({ forId: sourceTypeId, items: [] }));
+    return () => {
+      active = false;
+    };
   }, [query.querySourceTypeId, datasource]);
+
+  // Only results loaded for the currently selected ids count; anything else is empty or still loading.
+  const columnsLoading = !!query.queryRtId && loadedColumns.forId !== query.queryRtId;
+  const columns = query.queryRtId && !columnsLoading ? loadedColumns.items : [];
+  const attributesLoading = !!query.querySourceTypeId && loadedSourceAttributes.forId !== query.querySourceTypeId;
+  const sourceAttributes = query.querySourceTypeId && !attributesLoading ? loadedSourceAttributes.items : [];
 
   // Determine query type from cached queryCkTypeId
   const queryType = useMemo(() => getQueryType(query.queryCkTypeId), [query.queryCkTypeId]);

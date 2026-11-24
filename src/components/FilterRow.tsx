@@ -1,7 +1,6 @@
 import React, { useMemo } from 'react';
-import { Combobox, IconButton, Input, Select, Stack } from '@grafana/ui';
+import { Combobox, ComboboxOption, IconButton, Input, Select, Stack } from '@grafana/ui';
 import { SelectableValue } from '@grafana/data';
-import { ComboboxOption } from '@grafana/ui/dist/types/components/Combobox/types';
 import { UserFieldFilter, QueryColumnDto, FilterOperator } from '../types';
 import {
   getOperatorsForType,

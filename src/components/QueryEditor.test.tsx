@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { act } from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import { QueryEditor } from './QueryEditor';
 import { OctoMeshQuery, SystemQueryDto, QueryColumnDto } from '../types';
@@ -89,7 +89,113 @@ describe('QueryEditor', () => {
         // to ONLY return wrong-cased items and see if the user can select them? 
         // No, that's manual.
 
-        // Let's rely on the assumption that if 'updatedAt' (lowercase d) is not supported, 
+        // Let's rely on the assumption that if 'updatedAt' (lowercase d) is not supported,
         // we should update the code to support it.
+    });
+
+    const renderWith = (queryRtId?: string) => {
+        const props = {
+            datasource: ds,
+            query: { refId: 'A', queryRtId } as OctoMeshQuery,
+            onRunQuery,
+            onChange,
+        };
+        const result = render(<QueryEditor {...props} />);
+        const rerenderWith = (nextRtId?: string) =>
+            result.rerender(<QueryEditor {...props} query={{ refId: 'A', queryRtId: nextRtId } as OctoMeshQuery} />);
+        return { ...result, rerenderWith };
+    };
+
+    it('shows the loading indicator until the columns of the selected query arrive', async () => {
+        let resolveColumns: (columns: QueryColumnDto[]) => void = () => undefined;
+        ds.fetchQueryColumns = jest.fn(
+            () => new Promise<QueryColumnDto[]>((resolve) => {
+                resolveColumns = resolve;
+            })
+        );
+
+        renderWith('q1');
+
+        expect(await screen.findByText('Loading columns...')).toBeInTheDocument();
+        resolveColumns(mockColumns);
+        expect(await screen.findByText('Columns (5)')).toBeInTheDocument();
+        expect(screen.queryByText('Loading columns...')).not.toBeInTheDocument();
+    });
+
+    it('clears the columns when the query is deselected, without fetching again', async () => {
+        const { rerenderWith } = renderWith('q1');
+        expect(await screen.findByText('Columns (5)')).toBeInTheDocument();
+
+        rerenderWith(undefined);
+
+        expect(screen.queryByText(/^Columns \(/)).not.toBeInTheDocument();
+        expect(screen.queryByText('Loading columns...')).not.toBeInTheDocument();
+        expect(ds.fetchQueryColumns).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not show the columns of the previous query while the next one loads', async () => {
+        const { rerenderWith } = renderWith('q1');
+        expect(await screen.findByText('Columns (5)')).toBeInTheDocument();
+
+        let resolveNext: (columns: QueryColumnDto[]) => void = () => undefined;
+        ds.fetchQueryColumns.mockImplementationOnce(
+            () => new Promise<QueryColumnDto[]>((resolve) => {
+                resolveNext = resolve;
+            })
+        );
+        rerenderWith('q2');
+
+        expect(await screen.findByText('Loading columns...')).toBeInTheDocument();
+        expect(screen.queryByText('Columns (5)')).not.toBeInTheDocument();
+
+        resolveNext([{ attributePath: 'only', attributeValueType: 'String' }]);
+        expect(await screen.findByText('Columns (1)')).toBeInTheDocument();
+        expect(ds.fetchQueryColumns).toHaveBeenLastCalledWith('q2');
+    });
+
+    // Returns a fetch mock whose calls stay pending until resolved by id, in any order.
+    const deferredById = <T,>() => {
+        const pending = new Map<string, (value: T) => void>();
+        const fn = jest.fn((id: string) => new Promise<T>((resolve) => pending.set(id, resolve)));
+        const resolve = (id: string, value: T) => act(async () => pending.get(id)!(value));
+        return { fn, resolve };
+    };
+
+    it('ignores a late response for the previous query once the next query has loaded', async () => {
+        const columnsFetch = deferredById<QueryColumnDto[]>();
+        ds.fetchQueryColumns = columnsFetch.fn;
+        const { rerenderWith } = renderWith('q1');
+        rerenderWith('q2');
+
+        await columnsFetch.resolve('q2', [{ attributePath: 'only', attributeValueType: 'String' }]);
+        expect(await screen.findByText('Columns (1)')).toBeInTheDocument();
+
+        await columnsFetch.resolve('q1', mockColumns);
+        expect(screen.getByText('Columns (1)')).toBeInTheDocument();
+        expect(screen.queryByText('Columns (5)')).not.toBeInTheDocument();
+        expect(screen.queryByText('Loading columns...')).not.toBeInTheDocument();
+    });
+
+    it('uses only the source attributes loaded for the selected source type', async () => {
+        const attributesFetch = deferredById<QueryColumnDto[]>();
+        ds.fetchQueryColumns = jest.fn().mockResolvedValue([]);
+        ds.fetchTypeAttributes = attributesFetch.fn;
+        const props = { datasource: ds, onRunQuery, onChange };
+        const queryFor = (querySourceTypeId: string) =>
+            ({ refId: 'A', queryRtId: 'q1', querySourceTypeId }) as OctoMeshQuery;
+        const { rerender } = render(<QueryEditor {...props} query={queryFor('t1')} />);
+        await waitFor(() => expect(ds.fetchQueryColumns).toHaveBeenCalledWith('q1'));
+        rerender(<QueryEditor {...props} query={queryFor('t2')} />);
+
+        // Nothing is loaded for t2 yet: no filter section.
+        expect(screen.queryByText(/^Field Filters/)).not.toBeInTheDocument();
+
+        await attributesFetch.resolve('t2', mockColumns);
+        expect(await screen.findByText(/^Field Filters/)).toBeInTheDocument();
+
+        // A late answer for t1 must neither replace t2's attributes nor bring back the loading state.
+        await attributesFetch.resolve('t1', []);
+        expect(screen.getByText(/^Field Filters/)).toBeInTheDocument();
+        expect(attributesFetch.fn).toHaveBeenLastCalledWith('t2');
     });
 });
